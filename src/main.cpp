@@ -137,12 +137,17 @@ void handleVoice() {
         audio::beepError();
         return;
     }
-    const String text = stt::transcribe(wav, wavLen, state::listItems());
+    String sttError;
+    const String text = stt::transcribe(wav, wavLen, state::listItems(), &sttError);
     // Ostatnie nagranie do odsłuchu w panelu WWW (diagnostyka jakości mikrofonu).
-    web::setLastRecording(wav, wavLen, text, diag);
+    web::setLastRecording(wav, wavLen, text,
+                          sttError.length() ? "Błąd rozpoznawania: " + sttError + " | " + diag : diag);
     led(false);
     if (text.isEmpty()) {
         audio::beepError();
+        setFooter("Błąd rozpoznawania – szczegóły w /nagranie");
+        requestRefresh();
+        while (talkButtonHeld()) delay(10);
         return;
     }
 

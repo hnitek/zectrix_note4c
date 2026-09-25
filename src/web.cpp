@@ -98,13 +98,15 @@ void begin(void (*onChange)()) {
         if (!lastWav) {
             h += "<p>Brak nagrań od uruchomienia.</p>";
         } else {
-            String t = lastText;
+            String t = lastText, d = lastDiag;
             t.replace("&", "&amp;");
             t.replace("<", "&lt;");
+            d.replace("&", "&amp;");
+            d.replace("<", "&lt;");
             h += "<audio controls src='/ostatnie.wav' style='width:100%'></audio>"
                  "<p>Rozpoznany tekst:</p><p style='font-size:22px'><b>" +
                  (t.length() ? t : String("(nic)")) + "</b></p><p style='color:#777;font-size:14px'>" +
-                 lastDiag + "</p>";
+                 d + "</p>";
         }
         server.send(200, "text/html; charset=utf-8", h);
     });
