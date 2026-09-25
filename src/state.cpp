@@ -65,7 +65,7 @@ bool applyText(const std::string& text, String* summary) {
             if (list.add(item)) added.push_back(item);
         }
         changed = !added.empty();
-        if (summary) *summary = changed ? "Dodano: " + join(added) : "Już jest na liście";
+        if (summary) *summary = changed ? "Dodano: " + join(added) : "Już jest na liście: " + join(cmd.items);
     } else if (cmd.kind == VoiceCommand::Kind::Remove) {
         std::vector<std::string> removed;
         for (const auto& item : cmd.items) {

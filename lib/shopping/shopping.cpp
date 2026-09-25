@@ -53,37 +53,94 @@ bool startsWith(const std::string& s, const std::string& prefix) {
     return s.size() >= prefix.size() && s.compare(0, prefix.size(), prefix) == 0;
 }
 
-bool endsWith(const std::string& s, const std::string& suffix) {
-    return s.size() >= suffix.size() &&
-           s.compare(s.size() - suffix.size(), suffix.size(), suffix) == 0;
+// Zdejmuje najdłuższy pasujący prefiks (całe słowa). Zwraca true, jeśli coś zdjęto.
+// Litery bez polskich znaków – do porównywania czasowników, bo Whisper czasem
+// zwraca "usun" zamiast "usuń".
+std::string fold(const std::string& s) {
+    static const std::pair<const char*, char> kMap[] = {
+        {"ą", 'a'}, {"ć", 'c'}, {"ę", 'e'}, {"ł", 'l'}, {"ń", 'n'},
+        {"ó", 'o'}, {"ś", 's'}, {"ź", 'z'}, {"ż", 'z'},
+    };
+    std::string out;
+    for (size_t i = 0; i < s.size();) {
+        bool mapped = false;
+        for (const auto& m : kMap) {
+            if (s.compare(i, 2, m.first) == 0) {
+                out += m.second;
+                i += 2;
+                mapped = true;
+                break;
+            }
+        }
+        if (!mapped) out += s[i++];
+    }
+    return out;
+}
+
+std::vector<std::string> splitWords(const std::string& s) {
+    std::vector<std::string> w;
+    std::string cur;
+    for (char c : s) {
+        if (c == ' ') {
+            if (!cur.empty()) w.push_back(cur);
+            cur.clear();
+        } else {
+            cur += c;
+        }
+    }
+    if (!cur.empty()) w.push_back(cur);
+    return w;
+}
+
+std::string joinWords(const std::vector<std::string>& w, size_t from, size_t to) {
+    std::string out;
+    for (size_t i = from; i < to; ++i) {
+        if (!out.empty()) out += ' ';
+        out += w[i];
+    }
+    return out;
+}
+
+// Czy słowa s[at..] zaczynają się od frazy (porównanie bez polskich znaków).
+bool wordsMatchAt(const std::vector<std::string>& s, size_t at, const std::vector<std::string>& phrase) {
+    if (phrase.empty() || at + phrase.size() > s.size()) return false;
+    for (size_t i = 0; i < phrase.size(); ++i) {
+        if (fold(s[at + i]) != fold(phrase[i])) return false;
+    }
+    return true;
 }
 
 // Zdejmuje najdłuższy pasujący prefiks (całe słowa). Zwraca true, jeśli coś zdjęto.
 bool stripPrefix(std::string& s, const std::vector<std::string>& prefixes) {
-    const std::string* best = nullptr;
+    const auto words = splitWords(s);
+    size_t best = 0;
     for (const auto& p : prefixes) {
-        if ((s == p || startsWith(s, p + " ")) && (!best || p.size() > best->size())) {
-            best = &p;
-        }
+        const auto pw = splitWords(p);
+        if (pw.size() > best && wordsMatchAt(words, 0, pw)) best = pw.size();
     }
     if (!best) return false;
-    s = trim(s.substr(best->size()));
+    s = joinWords(words, best, words.size());
     return true;
 }
 
+// Zdejmuje najdłuższy pasujący sufiks (całe słowa).
 bool stripSuffix(std::string& s, const std::vector<std::string>& suffixes) {
+    const auto words = splitWords(s);
+    size_t best = 0;
     for (const auto& p : suffixes) {
-        if (s == p) {
-            s.clear();
-            return true;
-        }
-        if (endsWith(s, " " + p)) {
-            s = trim(s.substr(0, s.size() - p.size() - 1));
-            return true;
+        const auto pw = splitWords(p);
+        if (pw.size() > best && pw.size() <= words.size() &&
+            wordsMatchAt(words, words.size() - pw.size(), pw)) {
+            best = pw.size();
         }
     }
-    return false;
+    if (!best) return false;
+    s = joinWords(words, 0, words.size() - best);
+    return true;
 }
+
+// Porównanie całych fraz bez polskich znaków.
+bool samePhrase(const std::string& a, const std::string& b) { return fold(a) == fold(b); }
 
 const std::vector<std::string> kClearPhrases = {
     "wyczyść listę", "wyczyść całą listę", "wyczyść wszystko", "wyczyść",
@@ -105,6 +162,8 @@ const std::vector<std::string> kUndoPhrases = {
 };
 
 const std::vector<std::string> kRemoveVerbs = {
+    "usuwam", "usunąć", "usuń mi", "usuń nam", "usuń proszę", "proszę usunąć", "możesz usunąć",
+    "skreślam", "wykreślam", "skasuj mi",
     "odhacz", "nie potrzeba", "nie trzeba", "nie kupuj", "nie kupujemy", "zdejmij", "zdejmij z listy",
     "wyrzuć", "wyrzuć z listy",
     "usuń", "usuń z listy", "skreśl", "skreśl z listy", "wykreśl", "wykreśl z listy",
@@ -129,7 +188,7 @@ const std::vector<std::string> kHallucinations = {
     "do zobaczenia",
 };
 
-const std::vector<std::string> kFillers = {"jeszcze", "też", "także", "proszę", "również"};
+const std::vector<std::string> kFillers = {"jeszcze", "też", "także", "proszę", "również", "mi", "nam"};
 
 std::vector<std::string> splitItems(const std::string& s) {
     // Separatory: przecinek (już zamieniony na " , "), " i ", " oraz ", " a także ".
@@ -197,8 +256,54 @@ std::string utf8Prefix(const std::string& s, size_t n) {
 
 }  // namespace
 
+// Łączy rozbite znaki Unicode ("n" + akcent -> "ń") i zamienia nietypowe spacje/cudzysłowy.
+static std::string composeUnicode(const std::string& in) {
+    struct Comb { char base; unsigned char mark; const char* out; };
+    static const Comb kComb[] = {
+        {'a', 0xA8, "ą"}, {'e', 0xA8, "ę"}, {'c', 0x81, "ć"}, {'n', 0x81, "ń"}, {'o', 0x81, "ó"},
+        {'s', 0x81, "ś"}, {'z', 0x81, "ź"}, {'z', 0x87, "ż"}, {'A', 0xA8, "Ą"}, {'E', 0xA8, "Ę"},
+        {'C', 0x81, "Ć"}, {'N', 0x81, "Ń"}, {'O', 0x81, "Ó"}, {'S', 0x81, "Ś"}, {'Z', 0x81, "Ź"},
+        {'Z', 0x87, "Ż"},
+    };
+    std::string out;
+    for (size_t i = 0; i < in.size();) {
+        const unsigned char c = in[i];
+        // Znak łączący U+0300..U+036F (0xCC 0x80..0xCD 0xAF): doklejamy do litery albo pomijamy.
+        if ((c == 0xCC || c == 0xCD) && i + 1 < in.size()) {
+            const unsigned char m = in[i + 1];
+            if (c == 0xCC && !out.empty()) {
+                for (const auto& k : kComb) {
+                    if (out.back() == k.base && m == k.mark) {
+                        out.pop_back();
+                        out += k.out;
+                        break;
+                    }
+                }
+            }
+            i += 2;
+            continue;
+        }
+        if (c == 0xC2 && i + 1 < in.size() && (unsigned char)in[i + 1] == 0xA0) {  // twarda spacja
+            out += ' ';
+            i += 2;
+            continue;
+        }
+        if (c == 0xE2 && i + 2 < in.size() && (unsigned char)in[i + 1] == 0x80) {
+            const unsigned char d = in[i + 2];
+            // spacje U+2000..U+200B i U+202F, myślniki i cudzysłowy U+2013..U+201E
+            if (d <= 0x8B || d == 0xAF || (d >= 0x93 && d <= 0x9E)) {
+                out += ' ';
+                i += 3;
+                continue;
+            }
+        }
+        out += in[i++];
+    }
+    return out;
+}
+
 std::string normalizeText(const std::string& text) {
-    std::string lower = toLower(text);
+    std::string lower = toLower(composeUnicode(text));
     std::string out;
     for (char ch : lower) {
         unsigned char c = ch;
@@ -302,8 +407,9 @@ bool isPromptEcho(const std::string& text, const std::string& prompt) {
 }
 
 bool itemsMatch(const std::string& a, const std::string& b) {
-    const std::string na = normalizeText(a);
-    const std::string nb = normalizeText(b);
+    // Bez polskich znaków: "maslo" z rozpoznawania ma pasować do "Masło" na liście.
+    const std::string na = fold(normalizeText(a));
+    const std::string nb = fold(normalizeText(b));
     if (na.empty() || nb.empty()) return false;
     if (na == nb) return true;
     // "mleko" pasuje do "mleko 2l"
@@ -335,7 +441,7 @@ VoiceCommand parseVoiceCommand(const std::string& text) {
     for (const auto& phrase : kClearPhrases) {
         std::string t = s;
         stripSuffix(t, kListWords);
-        if (t == phrase) {
+        if (samePhrase(t, phrase)) {
             cmd.kind = VoiceCommand::Kind::Clear;
             return cmd;
         }
@@ -345,7 +451,7 @@ VoiceCommand parseVoiceCommand(const std::string& text) {
         std::string t = s;
         stripSuffix(t, kListWords);
         for (const auto& phrase : kUndoPhrases) {
-            if (t == phrase) {
+            if (samePhrase(t, phrase)) {
                 cmd.kind = VoiceCommand::Kind::Undo;
                 return cmd;
             }
@@ -375,7 +481,7 @@ bool ShoppingList::add(const std::string& item) {
     const std::string t = trim(item);
     if (t.empty()) return false;
     for (const auto& existing : items_) {
-        if (normalizeText(existing) == normalizeText(t)) return false;
+        if (fold(normalizeText(existing)) == fold(normalizeText(t))) return false;
     }
     items_.push_back(capitalizeFirst(t));
     return true;

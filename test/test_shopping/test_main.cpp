@@ -71,6 +71,19 @@ void test_remove_suffix_and_more_verbs() {
     assertItems(c, {"Mleka"});
 }
 
+void test_remove_variants_from_whisper() {
+    const char* variants[] = {"Usun\xcc\x81 masło.", "Usun masło", "Usuwam masło", "Usunąć masło",
+                              "Usuń mi masło", "Usuń\xc2\xa0masło", "USUŃ MASŁO", "usun maslo"};
+    for (const char* v : variants) {
+        ShoppingList list;
+        list.add("Masło");
+        TEST_ASSERT_TRUE_MESSAGE(list.apply(parseVoiceCommand(v)), v);
+        TEST_ASSERT_EQUAL_size_t(0, list.items().size());
+    }
+    TEST_ASSERT_TRUE(parseVoiceCommand("Wyczysc liste").kind == Kind::Clear);
+    TEST_ASSERT_TRUE(parseVoiceCommand("Cofnij").kind == Kind::Undo);
+}
+
 void test_undo() {
     TEST_ASSERT_TRUE(parseVoiceCommand("Cofnij.").kind == Kind::Undo);
     TEST_ASSERT_TRUE(parseVoiceCommand("Usuń ostatnie").kind == Kind::Undo);
@@ -143,6 +156,7 @@ int main() {
     RUN_TEST(test_add_need_phrases);
     RUN_TEST(test_remove);
     RUN_TEST(test_remove_suffix_and_more_verbs);
+    RUN_TEST(test_remove_variants_from_whisper);
     RUN_TEST(test_undo);
     RUN_TEST(test_clear);
     RUN_TEST(test_empty);
