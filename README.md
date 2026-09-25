@@ -69,7 +69,14 @@ i różu powstają z mieszania kolorów panelu w szachownicę.
 
 ## Instalacja z przeglądarki (bez instalowania czegokolwiek)
 
-Gotowy plik: [`firmware/lodowka-note4c.bin`](firmware/lodowka-note4c.bin) (obraz od adresu `0x0`).
+W katalogu `firmware/` są dwa pliki:
+
+| Plik | Do czego | Ustawienia i lista |
+|---|---|---|
+| [`lodowka-note4c.bin`](firmware/lodowka-note4c.bin) | **pierwsza instalacja** kablem, od adresu `0x0` | kasuje (to pełny obraz pamięci) |
+| [`lodowka-note4c-app.bin`](firmware/lodowka-note4c-app.bin) | **aktualizacje** przez stronę `/aktualizacja` | zachowuje |
+
+Pierwsza instalacja kablem:
 
 1. Podłącz NOTE4C kablem USB-C (kabel musi przesyłać dane, nie tylko ładować) i włącz urządzenie.
 2. Otwórz w **Chrome** albo **Edge** stronę <https://espressif.github.io/esptool-js/>
@@ -106,6 +113,19 @@ Ustawienia możesz zmienić później pod `http://lodowka.local/ustawienia` (alb
 IP widać na dole ekranu po starcie). Do trybu konfiguracji wejdziesz też, trzymając
 **przycisk w górę** podczas włączania. Jeśli zapisana sieć nie odpowiada, urządzenie samo włączy
 tryb konfiguracji i dalej będzie próbowało się z nią połączyć.
+
+## Aktualizacje (bez kabla, ustawienia zostają)
+
+1. Pobierz nowy plik `firmware/lodowka-note4c-app.bin`.
+2. Na telefonie albo komputerze w tej samej sieci otwórz `http://lodowka.local/aktualizacja`
+   (albo `http://<IP>/aktualizacja`).
+3. Wybierz plik i kliknij **Wgraj**. Po około minucie urządzenie uruchomi się z nową wersją.
+
+Klucz API, Wi-Fi, miasto i lista zakupów zostają. Strona odrzuci pełny obraz `lodowka-note4c.bin`,
+bo wgranie go nadpisałoby ustawienia.
+
+> Jeśli trzeba wgrać coś kablem (np. urządzenie się nie uruchamia), użyj pełnego obrazu
+> `lodowka-note4c.bin` od `0x0`. Ustawienia trzeba wtedy podać od nowa.
 
 ## Budowanie samodzielnie (PlatformIO)
 

@@ -1,6 +1,7 @@
 #include "web.h"
 
 #include <ArduinoJson.h>
+#include <Update.h>
 #include <WebServer.h>
 
 #include "settings.h"
@@ -15,6 +16,55 @@ uint8_t* lastWav = nullptr;
 size_t lastWavLen = 0;
 String lastText;
 String lastDiag;
+String otaError;
+
+const char kOtaPage[] PROGMEM = R"HTML(<!doctype html><html lang="pl"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1"><title>Aktualizacja</title>
+<style>body{font:17px system-ui,sans-serif;max-width:520px;margin:auto;padding:16px}
+button{padding:12px 16px;font:inherit;border:0;border-radius:10px;background:#c62828;color:#fff;width:100%;margin-top:16px}
+input{font:inherit;width:100%}progress{width:100%;height:20px;margin-top:16px}</style></head><body>
+<p><a href="/">&larr; Lista</a></p><h2>Aktualizacja oprogramowania</h2>
+<p>Wybierz plik <b>lodowka-note4c-app.bin</b>. Ustawienia i lista zakupów zostaną zachowane.</p>
+<form id="f"><input type="file" id="p" accept=".bin" required><button>Wgraj</button></form>
+<progress id="g" max="100" value="0" hidden></progress><p id="m"></p>
+<script>
+document.getElementById('f').onsubmit=e=>{e.preventDefault();const file=document.getElementById('p').files[0];if(!file)return;
+ const g=document.getElementById('g'),m=document.getElementById('m');g.hidden=false;
+ const x=new XMLHttpRequest();x.open('POST','/aktualizacja');
+ x.upload.onprogress=ev=>{if(ev.lengthComputable)g.value=ev.loaded*100/ev.total};
+ x.onload=()=>{m.textContent=x.responseText};x.onerror=()=>{m.textContent='Błąd połączenia'};
+ const d=new FormData();d.append('firmware',file);x.send(d);m.textContent='Wgrywanie...'};
+</script></body></html>)HTML";
+
+// Aktualizacja przez przeglądarkę: zapis do drugiego slotu aplikacji (OTA),
+// więc ustawienia (NVS) i lista zakupów zostają nietknięte.
+void handleOtaUpload() {
+    HTTPUpload& up = server.upload();
+    if (up.status == UPLOAD_FILE_START) {
+        otaError = "";
+        if (!Update.begin(UPDATE_SIZE_UNKNOWN)) otaError = Update.errorString();
+    } else if (up.status == UPLOAD_FILE_WRITE) {
+        if (!otaError.isEmpty()) return;
+        if (up.totalSize == 0) {
+            // Pełny obraz od 0x0 zaczyna się od bootloadera, a nie od aplikacji:
+            // aplikacja ma opis (esp_app_desc) z magiczną liczbą 0xABCD5432 pod offsetem 32.
+            const bool isApp = up.currentSize > 36 && up.buf[0] == 0xE9 && up.buf[32] == 0x32 &&
+                               up.buf[33] == 0x54 && up.buf[34] == 0xCD && up.buf[35] == 0xAB;
+            if (!isApp) {
+                otaError = "To nie jest plik aplikacji. Użyj lodowka-note4c-app.bin "
+                           "(pełny obraz lodowka-note4c.bin wgrywa się tylko kablem).";
+                Update.abort();
+                return;
+            }
+        }
+        if (Update.write(up.buf, up.currentSize) != up.currentSize) otaError = Update.errorString();
+    } else if (up.status == UPLOAD_FILE_END) {
+        if (otaError.isEmpty() && !Update.end(true)) otaError = Update.errorString();
+    } else if (up.status == UPLOAD_FILE_ABORTED) {
+        Update.abort();
+        otaError = "Przerwano wysyłanie";
+    }
+}
 
 const char kPage[] PROGMEM = R"HTML(<!doctype html>
 <html lang="pl"><head><meta charset="utf-8">
@@ -42,7 +92,8 @@ li button{background:none;color:var(--acc);padding:6px 10px;font-size:20px}
 <ul id="l"></ul>
 <div class="foot"><span id="c"></span><button id="x">Wyczyść listę</button></div>
 <p class="foot"><a href="/ustawienia" style="color:inherit">Ustawienia</a>
-<a href="/nagranie" style="color:inherit">Ostatnie nagranie</a></p>
+<a href="/nagranie" style="color:inherit">Ostatnie nagranie</a>
+<a href="/aktualizacja" style="color:inherit">Aktualizacja</a></p>
 </main><script>
 const l=document.getElementById('l'),c=document.getElementById('c');
 async function api(p,b){const r=await fetch(p,{method:b?'POST':'GET',body:b});render(await r.json())}
@@ -91,6 +142,21 @@ void begin(void (*onChange)()) {
         sendList();
     });
     settings::registerRoutes(server, "/ustawienia");
+    server.on("/aktualizacja", HTTP_GET, [] { server.send_P(200, "text/html; charset=utf-8", kOtaPage); });
+    server.on(
+        "/aktualizacja", HTTP_POST,
+        [] {
+            if (!otaError.isEmpty() || Update.hasError()) {
+                server.send(500, "text/plain; charset=utf-8",
+                            "Błąd: " + (otaError.length() ? otaError : String(Update.errorString())));
+                return;
+            }
+            server.send(200, "text/plain; charset=utf-8",
+                        "Gotowe. Urządzenie uruchamia się ponownie – ekran odświeży się za ok. minutę.");
+            delay(1000);
+            ESP.restart();
+        },
+        handleOtaUpload);
     server.on("/nagranie", HTTP_GET, [] {
         String h = "<!doctype html><meta charset=utf-8><meta name=viewport content='width=device-width'>"
                    "<body style='font:17px system-ui;padding:16px;max-width:520px;margin:auto'>"
