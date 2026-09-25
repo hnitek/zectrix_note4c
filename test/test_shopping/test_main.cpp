@@ -67,6 +67,24 @@ void test_empty() {
         parseVoiceCommand("Napisy stworzone przez społeczność Amara.org").kind == Kind::None);
 }
 
+void test_bare_item_is_add() {
+    auto c = parseVoiceCommand("Mleko.");
+    TEST_ASSERT_TRUE(c.kind == Kind::Add);
+    assertItems(c, {"Mleko"});
+    c = parseVoiceCommand("- Mleko");
+    assertItems(c, {"Mleko"});
+}
+
+void test_prompt_echo() {
+    const std::string p = buildSttPrompt({"Pomidory"});
+    TEST_ASSERT_TRUE(p.find("pomidory, mleko") != std::string::npos);  // lista najpierw, bez duplikatu
+    TEST_ASSERT_TRUE(isPromptEcho("Lista zakupów. Produkty: pomidory, mleko, chleb.", p));
+    TEST_ASSERT_TRUE(isPromptEcho("pomidory, mleko, chleb, masło, jajka, ser żółty, twaróg", p));
+    TEST_ASSERT_FALSE(isPromptEcho("Mleko", p));
+    TEST_ASSERT_FALSE(isPromptEcho("dodaj mleko, chleb i masło", p));
+    TEST_ASSERT_FALSE(isPromptEcho("Wyczyść listę zakupów", p));
+}
+
 void test_items_match_inflection() {
     TEST_ASSERT_TRUE(itemsMatch("Jajka", "jajek"));
     TEST_ASSERT_TRUE(itemsMatch("Masło", "masła"));
@@ -96,6 +114,8 @@ int main() {
     RUN_TEST(test_remove);
     RUN_TEST(test_clear);
     RUN_TEST(test_empty);
+    RUN_TEST(test_bare_item_is_add);
+    RUN_TEST(test_prompt_echo);
     RUN_TEST(test_items_match_inflection);
     RUN_TEST(test_list_apply);
     return UNITY_END();

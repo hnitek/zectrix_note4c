@@ -21,6 +21,14 @@ VoiceCommand parseVoiceCommand(const std::string& text);
 // Małe litery (ASCII + polskie znaki w UTF-8), bez interpunkcji, pojedyncze spacje.
 std::string normalizeText(const std::string& text);
 
+// Podpowiedź słownictwa dla rozpoznawania mowy (parametr "prompt" Whispera):
+// typowe produkty + to, co już jest na liście (żeby "usuń X" trafiało w te same nazwy).
+std::string buildSttPrompt(const std::vector<std::string>& listItems);
+
+// Whisper przy niewyraźnym nagraniu potrafi zwrócić po prostu treść podpowiedzi.
+// Zwraca true, jeśli rozpoznany tekst wygląda na takie "echo".
+bool isPromptEcho(const std::string& text, const std::string& prompt);
+
 // Wielka pierwsza litera (obsługuje polskie znaki).
 std::string capitalizeFirst(const std::string& text);
 

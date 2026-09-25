@@ -8,7 +8,20 @@ enum EpdColor : uint16_t {
     EPD_WHITE = 1,
     EPD_YELLOW = 2,
     EPD_RED = 3,
+    // Kolory mieszane: szachownica dwóch kolorów panelu (z odległości wygląda jak kolor pośredni).
+    EPD_GRAY = 4,          // czarny + biały
+    EPD_ORANGE = 5,        // czerwony + żółty
+    EPD_LIGHT_YELLOW = 6,  // żółty + biały
+    EPD_PINK = 7,          // czerwony + biały
 };
+
+// Kolor panelu (0-3) dla danego piksela, z uwzględnieniem kolorów mieszanych.
+inline uint8_t epdResolveColor(uint16_t color, int x, int y) {
+    static const uint8_t mix[4][2] = {
+        {EPD_BLACK, EPD_WHITE}, {EPD_RED, EPD_YELLOW}, {EPD_YELLOW, EPD_WHITE}, {EPD_RED, EPD_WHITE}};
+    if (color < 4) return color;
+    return mix[(color - 4) & 3][(x ^ y) & 1];
+}
 
 // Czterokolorowy e-paper 400x300 z NOTE4C (kontroler SSD2683).
 // Rysowanie przez Adafruit_GFX do bufora 2 bpp (30 kB), potem display().

@@ -49,9 +49,11 @@ bool fetch(Weather& out) {
     String url = "https://api.open-meteo.com/v1/forecast?latitude=" + String(c.lat, 4) +
                  "&longitude=" + String(c.lon, 4) +
                  "&current=temperature_2m,apparent_temperature,relative_humidity_2m,"
-                 "weather_code,wind_speed_10m"
+                 "weather_code,wind_speed_10m,is_day"
+                 "&hourly=temperature_2m,precipitation_probability"
+                 "&forecast_hours=" + String(Weather::kHours + 1) +
                  "&daily=weather_code,temperature_2m_max,temperature_2m_min,"
-                 "precipitation_probability_max"
+                 "precipitation_probability_max,sunrise,sunset"
                  "&timezone=auto&forecast_days=3";
     String body;
     const int status = net::request("GET", url, nullptr, nullptr, 0, body);
@@ -68,6 +70,19 @@ bool fetch(Weather& out) {
     out.humidity = cur["relative_humidity_2m"] | 0;
     out.code = cur["weather_code"] | -1;
     out.wind = cur["wind_speed_10m"] | 0.0f;
+    out.isDay = (cur["is_day"] | 1) != 0;
+
+    // Godziny: "2026-09-25T14:00" -> 14. Pierwsza pozycja to bieżąca (pełna) godzina.
+    JsonObject hourly = doc["hourly"];
+    out.hourCount = 0;
+    for (int i = 0; i < Weather::kHours; ++i) {
+        const char* t = hourly["time"][i] | "";
+        if (strlen(t) < 13) break;
+        HourForecast& h = out.hours[out.hourCount++];
+        h.hour = atoi(t + 11);
+        h.temp = hourly["temperature_2m"][i] | 0.0f;
+        h.precipProb = hourly["precipitation_probability"][i] | 0;
+    }
 
     JsonObject daily = doc["daily"];
     for (int i = 0; i < 3; ++i) {
@@ -76,6 +91,11 @@ bool fetch(Weather& out) {
         out.days[i].tMin = daily["temperature_2m_min"][i] | 0.0f;
         out.days[i].precipProb = daily["precipitation_probability_max"][i] | 0;
     }
+    // "2026-09-25T06:42" -> "06:42"
+    const char* rise = daily["sunrise"][0] | "";
+    const char* set = daily["sunset"][0] | "";
+    if (strlen(rise) >= 16) strlcpy(out.sunrise, rise + 11, sizeof(out.sunrise));
+    if (strlen(set) >= 16) strlcpy(out.sunset, set + 11, sizeof(out.sunset));
     out.ok = true;
     return true;
 }
@@ -83,7 +103,7 @@ bool fetch(Weather& out) {
 const char* describe(int code) {
     switch (code) {
         case 0: return "Bezchmurnie";
-        case 1: return "Przeważnie pogodnie";
+        case 1: return "Pogodnie";
         case 2: return "Przejaśnienia";
         case 3: return "Pochmurno";
         case 45: case 48: return "Mgła";

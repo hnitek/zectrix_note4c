@@ -66,6 +66,10 @@ void setFooter(const String& msg) {
 
 bool sameWeather(const Weather& a, const Weather& b) {
     if (a.ok != b.ok || a.code != b.code || lroundf(a.temp) != lroundf(b.temp)) return false;
+    // Wykres godzinowy ma się przesuwać – najwyżej jedno odświeżenie na godzinę.
+    if (a.isDay != b.isDay || (a.hourCount && b.hourCount && a.hours[0].hour != b.hours[0].hour)) {
+        return false;
+    }
     for (int i = 0; i < 3; ++i) {
         if (a.days[i].code != b.days[i].code || lroundf(a.days[i].tMax) != lroundf(b.days[i].tMax) ||
             lroundf(a.days[i].tMin) != lroundf(b.days[i].tMin) ||
@@ -107,24 +111,24 @@ void handleVoice() {
         while (talkButtonHeld()) delay(10);
         return;
     }
-    led(true);
-    audio::beepStart();
+    led(true);  // dioda świeci = nagrywam, można mówić od razu
     size_t wavLen = 0;
     uint8_t* wav = audio::recordWav(wavLen, kMaxRecordMs, talkButtonHeld);
-    led(false);
     if (!wav) {
+        led(false);
         audio::beepError();
         return;
     }
+    audio::beepCaptured();
     if (!net::isConnected()) {
         free(wav);
+        led(false);
         audio::beepError();
         return;
     }
-    // Miganie diodą podczas rozpoznawania.
-    led(true);
-    const String text = stt::transcribe(wav, wavLen);
-    free(wav);
+    const String text = stt::transcribe(wav, wavLen, state::listItems());
+    // Ostatnie nagranie do odsłuchu w panelu WWW (diagnostyka jakości mikrofonu).
+    web::setLastRecording(wav, wavLen, text);
     led(false);
     if (text.isEmpty()) {
         audio::beepError();

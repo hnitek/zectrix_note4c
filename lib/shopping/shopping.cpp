@@ -134,6 +134,8 @@ std::vector<std::string> splitItems(const std::string& s) {
     std::string item;
     auto flush = [&]() {
         std::string t = trim(item);
+        while (!t.empty() && (t.front() == '-' || t.front() == '*')) t = trim(t.substr(1));
+        while (!t.empty() && t.back() == '-') t = trim(t.substr(0, t.size() - 1));
         while (stripPrefix(t, kFillers)) {}
         while (stripSuffix(t, kFillers)) {}
         if (!t.empty()) items.push_back(t);
@@ -221,6 +223,67 @@ std::string capitalizeFirst(const std::string& text) {
         if (text.compare(0, 2, p.lower) == 0) return std::string(p.upper) + text.substr(2);
     }
     return text;
+}
+
+namespace {
+// Krótko: Whisper bierze pod uwagę tylko ~224 tokeny podpowiedzi.
+const char* kGroceries[] = {
+    "mleko", "chleb", "masło", "jajka", "ser żółty", "twaróg", "jogurt", "śmietana", "szynka",
+    "kiełbasa", "kurczak", "pomidory", "ogórki", "ziemniaki", "cebula", "czosnek", "marchew",
+    "jabłka", "banany", "makaron", "ryż", "mąka", "cukier", "kawa", "herbata", "bułki",
+    "papier toaletowy", "płyn do naczyń",
+};
+constexpr size_t kMaxPromptListItems = 15;
+
+std::vector<std::string> words(const std::string& s) {
+    std::vector<std::string> out;
+    std::string cur;
+    for (char c : s) {
+        if (c == ' ' || c == ',') {
+            if (!cur.empty()) out.push_back(cur);
+            cur.clear();
+        } else {
+            cur += c;
+        }
+    }
+    if (!cur.empty()) out.push_back(cur);
+    return out;
+}
+}  // namespace
+
+std::string buildSttPrompt(const std::vector<std::string>& listItems) {
+    std::string p = "Lista zakupów. Produkty: ";
+    bool first = true;
+    auto append = [&](const std::string& item) {
+        if (!first) p += ", ";
+        p += normalizeText(item);
+        first = false;
+    };
+    for (size_t i = 0; i < listItems.size() && i < kMaxPromptListItems; ++i) append(listItems[i]);
+    for (const char* g : kGroceries) {
+        bool dup = false;
+        for (const auto& i : listItems) dup |= normalizeText(i) == g;
+        if (!dup) append(g);
+    }
+    return p + ".";
+}
+
+bool isPromptEcho(const std::string& text, const std::string& prompt) {
+    const std::string t = normalizeText(text);
+    // Nikt nie mówi do lodówki "lista zakupów, produkty: ..." w mianowniku.
+    if (t.find("lista zakupów") != std::string::npos || t.find("produkty") == 0) return true;
+    // Długi ciąg słów w tej samej kolejności co w podpowiedzi = przepisana podpowiedź.
+    const auto tw = words(t);
+    const auto pw = words(normalizeText(prompt));
+    if (tw.size() < 6) return false;
+    size_t j = 0, matched = 0;
+    for (const auto& w : tw) {
+        while (j < pw.size() && pw[j] != w) ++j;
+        if (j == pw.size()) break;
+        ++matched;
+        ++j;
+    }
+    return matched * 10 >= tw.size() * 8;
 }
 
 bool itemsMatch(const std::string& a, const std::string& b) {

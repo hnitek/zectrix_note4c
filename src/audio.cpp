@@ -11,7 +11,9 @@ namespace {
 
 I2SClass i2s;
 bool ready = false;
-constexpr int32_t kSilencePeak = 300;  // poniżej tego szczytu uznajemy nagranie za ciszę
+constexpr int32_t kSilencePeak = 300;   // poniżej tego szczytu uznajemy nagranie za ciszę
+constexpr uint32_t kMinRecordMs = 300;  // krótkie kliknięcie i tak nagra tyle
+constexpr uint32_t kPostRollMs = 350;   // dograwanie po puszczeniu przycisku
 
 bool writeReg(uint8_t reg, uint8_t val) {
     Wire.beginTransmission(ES8311_ADDR);
@@ -121,27 +123,29 @@ uint8_t* recordWav(size_t& wavLen, uint32_t maxMs, bool (*stillRecording)()) {
     if (!ready) return nullptr;
     const size_t maxFrames = kSampleRate * maxMs / 1000;
     uint8_t* wav = static_cast<uint8_t*>(ps_malloc(44 + maxFrames * 2));
-    if (!wav) return nullptr;
-    int16_t* mono = reinterpret_cast<int16_t*>(wav + 44);
-
-    // Odrzucamy pierwsze ~100 ms (stabilizacja ADC, klik przycisku).
-    int16_t frame[256 * 2];
-    for (int i = 0; i < 6; ++i) i2s.readBytes(reinterpret_cast<char*>(frame), sizeof(frame));
-
     // Czytamy stereo; później wybieramy kanał, na którym faktycznie jest mikrofon.
     int16_t* right = static_cast<int16_t*>(ps_malloc(maxFrames * 2));
-    if (!right) {
+    if (!wav || !right) {
         free(wav);
+        free(right);
         return nullptr;
     }
+    int16_t* mono = reinterpret_cast<int16_t*>(wav + 44);
+
+    // Nagrywamy od razu po wciśnięciu, bez piknięcia na start: wcześniej sygnał dźwiękowy
+    // i jego wybrzmiewanie zjadały ~0,35 s, czyli początek krótkich słów ("mleko" -> "ko").
+    // Bufor DMA zawiera też ułamek sekundy sprzed wciśnięcia – to nie przeszkadza.
+    int16_t frame[256 * 2];
     double energyL = 0, energyR = 0;
     size_t frames = 0;
-    const uint32_t minMs = 400;
+    uint32_t releasedAt = 0;
     const uint32_t start = millis();
     while (frames < maxFrames) {
-        const uint32_t elapsed = millis() - start;
-        if (elapsed > minMs && !stillRecording()) break;
-        size_t got = i2s.readBytes(reinterpret_cast<char*>(frame), sizeof(frame)) / 4;
+        const uint32_t now = millis();
+        if (!releasedAt && now - start > kMinRecordMs && !stillRecording()) releasedAt = now;
+        // Po puszczeniu przycisku nagrywamy jeszcze chwilę, żeby nie uciąć końcówki słowa.
+        if (releasedAt && now - releasedAt > kPostRollMs) break;
+        const size_t got = i2s.readBytes(reinterpret_cast<char*>(frame), sizeof(frame)) / 4;
         for (size_t i = 0; i < got && frames < maxFrames; ++i, ++frames) {
             mono[frames] = frame[2 * i];
             right[frames] = frame[2 * i + 1];
@@ -152,18 +156,33 @@ uint8_t* recordWav(size_t& wavLen, uint32_t maxMs, bool (*stillRecording)()) {
     if (energyR > energyL) memcpy(mono, right, frames * 2);
     free(right);
 
-    // Normalizacja głośności (szczyt ~ -3 dBFS), ułatwia rozpoznawanie.
+    // Szczyt liczony jako 99,9 percentyl, żeby pojedynczy trzask przycisku
+    // nie zaniżał wzmocnienia.
+    static uint32_t hist[128];
+    memset(hist, 0, sizeof(hist));
+    for (size_t i = 0; i < frames; ++i) hist[std::min(127, abs(mono[i]) >> 8)]++;
     int32_t peak = 1;
-    for (size_t i = 0; i < frames; ++i) peak = std::max<int32_t>(peak, abs(mono[i]));
+    size_t above = 0;
+    for (int b = 127; b >= 0; --b) {
+        above += hist[b];
+        if (above > frames / 1000) {
+            peak = std::max<int32_t>(1, (b + 1) << 8);
+            break;
+        }
+    }
     if (peak < kSilencePeak) {
         // Whisper na ciszy potrafi "zmyślić" tekst – nie wysyłamy jej wcale.
         log_w("Cisza (szczyt %d) – pomijam", int(peak));
         free(wav);
         return nullptr;
     }
-    const float gain = std::min(8.0f, 23000.0f / peak);
-    if (gain > 1.1f) {
-        for (size_t i = 0; i < frames; ++i) mono[i] = int16_t(mono[i] * gain);
+    // Normalizacja do ok. -6 dBFS, z miękkim ograniczeniem pojedynczych szczytów.
+    const float gain = std::min(10.0f, 16000.0f / peak);
+    for (size_t i = 0; i < frames; ++i) {
+        float v = mono[i] * gain;
+        if (v > 30000.0f) v = 30000.0f + (v - 30000.0f) * 0.1f;
+        if (v < -30000.0f) v = -30000.0f + (v + 30000.0f) * 0.1f;
+        mono[i] = int16_t(std::max(-32767.0f, std::min(32767.0f, v)));
     }
     log_i("Nagrano %u ms, szczyt %d, wzmocnienie %.1f", unsigned(frames * 1000 / kSampleRate),
           int(peak), gain);
@@ -173,7 +192,7 @@ uint8_t* recordWav(size_t& wavLen, uint32_t maxMs, bool (*stillRecording)()) {
     return wav;
 }
 
-void beepStart() { tone(880, 120); }
+void beepCaptured() { tone(1200, 60, 0.25f); }
 void beepOk() {
     tone(660, 90);
     tone(990, 140);

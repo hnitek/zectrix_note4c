@@ -2,10 +2,14 @@
 
 #include <Arduino.h>
 
+#include <string>
+#include <vector>
+
 // Zamiana mowy na tekst przez API zgodne z OpenAI (/v1/audio/transcriptions).
 namespace stt {
 
 // Zwraca rozpoznany tekst; pusty String przy błędzie (szczegóły w logu).
-String transcribe(const uint8_t* wav, size_t wavLen);
+// listItems: bieżąca lista – trafia do podpowiedzi słownictwa.
+String transcribe(const uint8_t* wav, size_t wavLen, const std::vector<std::string>& listItems);
 
 }  // namespace stt

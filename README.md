@@ -29,24 +29,40 @@ Nagranie wysyłane jest tylko wtedy, gdy trzymasz przycisk.
 
 | Akcja | Co robi |
 |---|---|
-| **Przytrzymaj środkowy przycisk** i mów, puść po skończeniu | polecenie głosowe (maks. 10 s) |
+| **Przytrzymaj środkowy przycisk** i mów od razu, puść po skończeniu | polecenie głosowe (maks. 10 s); zielona dioda świeci, gdy urządzenie nagrywa |
 | Przycisk **w górę** | natychmiastowe odświeżenie pogody i ekranu |
 | `http://lodowka.local` lub IP ze stopki ekranu | edycja listy z telefonu |
 
-Sygnały dźwiękowe: krótki pisk = słucham, dwa tony w górę = zrobione, niski ton = nie zrozumiałem
-albo błąd. Wynik ostatniego polecenia pojawia się na żółtym pasku u dołu ekranu.
+Sygnały dźwiękowe: krótki pisk po puszczeniu przycisku = nagrane, dwa tony w górę = zrobione,
+niski ton = nie zrozumiałem albo błąd. Wynik ostatniego polecenia pojawia się na żółtym pasku u dołu ekranu.
 
 ### Przykładowe polecenia
 
 | Powiedz | Efekt |
 |---|---|
-| „Dodaj mleko, chleb i masło” | dodaje 3 pozycje |
-| „Jajka i żółty ser” | bez czasownika też dodaje |
+| „Mleko” | dodaje mleko (czasownik nie jest potrzebny) |
+| „Mleko, chleb i masło” | dodaje 3 pozycje |
+| „Dodaj jajka i żółty ser” | też dodaje |
 | „Trzeba kupić ketchup” / „Skończyło się masło” | dodaje |
 | „Usuń mleko” / „Skreśl chleb” / „Kupiłem jajka” | usuwa (rozumie odmianę: „jajek” pasuje do „Jajka”) |
 | „Wyczyść listę” | czyści wszystko |
 
 W polu tekstowym panelu WWW możesz wpisywać te same polecenia.
+
+**Gdy rozpoznawanie się myli:** w panelu WWW otwórz **„Ostatnie nagranie”** (`/nagranie`).
+Odsłuchasz tam, co faktycznie nagrał mikrofon, i zobaczysz, jaki tekst z tego rozpoznano.
+Do rozpoznawania wysyłana jest podpowiedź z typowymi produktami i bieżącą listą, co mocno pomaga
+przy pojedynczych słowach. Jeśli Groq dalej się myli, w `/ustawienia` wybierz **OpenAI**
+(model `gpt-4o-mini-transcribe`, płatny, ale lepiej radzi sobie z polskim).
+
+### Pogoda
+
+![Warianty karty pogody](docs/pogoda.png)
+
+Kolor karty zależy od pogody: żółta przy słońcu, czarna w nocy, czerwona przy burzy. Temperatura
+od 25° jest czerwona. Pod kartą widać wykres na 12 godzin: czerwona linia to temperatura, słupki
+to szansa opadów (różowe od 50%). Niżej jest prognoza na 3 dni. Odcienie szarości, pomarańczu
+i różu powstają z mieszania kolorów panelu w szachownicę.
 
 > E-papier odświeża się w pełnych kolorach ok. **20–25 s**, a ekran w tym czasie mruga. To normalne.
 > Dlatego ekran odświeża się tylko po zmianie listy, zmianie pogody (sprawdzanej co 30 min) i o północy.

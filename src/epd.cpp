@@ -44,11 +44,17 @@ void Epd4Color::drawPixel(int16_t x, int16_t y, uint16_t color) {
     }
     const size_t idx = y * kBytesPerRow + (x >> 2);
     const uint8_t shift = 6 - ((x & 3) << 1);
-    buf_[idx] = (buf_[idx] & ~(0x03 << shift)) | ((color & 0x03) << shift);
+    const uint8_t c = epdResolveColor(color, x, y);
+    buf_[idx] = (buf_[idx] & ~(0x03 << shift)) | (c << shift);
 }
 
 void Epd4Color::fillScreen(uint16_t color) {
-    if (buf_) memset(buf_, solidByte(color & 0x03), kBufSize);
+    if (!buf_) return;
+    if (color < 4) {
+        memset(buf_, solidByte(color), kBufSize);
+    } else {
+        Adafruit_GFX::fillScreen(color);
+    }
 }
 
 void Epd4Color::command(uint8_t c) {

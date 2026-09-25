@@ -3,6 +3,7 @@
 #include <ArduinoJson.h>
 
 #include "net.h"
+#include "shopping.h"
 #include "config.h"
 
 namespace stt {
@@ -21,7 +22,7 @@ void addField(String& s, const char* name, const char* value) {
 }
 }  // namespace
 
-String transcribe(const uint8_t* wav, size_t wavLen) {
+String transcribe(const uint8_t* wav, size_t wavLen, const std::vector<std::string>& listItems) {
     const Config& c = config::get();
     if (c.sttKey.isEmpty()) {
         log_e("Brak klucza API do rozpoznawania mowy (ustaw w /ustawienia)");
@@ -31,6 +32,10 @@ String transcribe(const uint8_t* wav, size_t wavLen) {
     addField(head, "model", c.sttModel.c_str());
     addField(head, "language", "pl");
     addField(head, "response_format", "json");
+    addField(head, "temperature", "0");
+    // Słownictwo zakupowe bardzo pomaga przy pojedynczych słowach ("mleko", "masło").
+    const std::string prompt = buildSttPrompt(listItems);
+    addField(head, "prompt", prompt.c_str());
     head += "--";
     head += kBoundary;
     head += "\r\nContent-Disposition: form-data; name=\"file\"; filename=\"speech.wav\"\r\n"
@@ -61,6 +66,10 @@ String transcribe(const uint8_t* wav, size_t wavLen) {
     String text = doc["text"] | "";
     text.trim();
     log_i("Rozpoznano: \"%s\"", text.c_str());
+    if (isPromptEcho(text.c_str(), prompt)) {
+        log_w("Odrzucam: to powtórzona podpowiedź, nie mowa");
+        return "";
+    }
     return text;
 }
 

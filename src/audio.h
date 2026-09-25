@@ -15,7 +15,7 @@ bool begin();
 uint8_t* recordWav(size_t& wavLen, uint32_t maxMs, bool (*stillRecording)());
 
 // Krótkie sygnały dźwiękowe.
-void beepStart();  // zaczynam słuchać
+void beepCaptured();  // nagranie zakończone, wysyłam do rozpoznania
 void beepOk();     // polecenie wykonane
 void beepError();  // nie zrozumiałem / błąd
 

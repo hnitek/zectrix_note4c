@@ -11,6 +11,9 @@ namespace {
 
 WebServer server(80);
 void (*changed)() = nullptr;
+uint8_t* lastWav = nullptr;
+size_t lastWavLen = 0;
+String lastText;
 
 const char kPage[] PROGMEM = R"HTML(<!doctype html>
 <html lang="pl"><head><meta charset="utf-8">
@@ -37,7 +40,8 @@ li button{background:none;color:var(--acc);padding:6px 10px;font-size:20px}
 <form id="f"><input id="i" placeholder="np. mleko, chleb i masło" autocomplete="off"><button>Dodaj</button></form>
 <ul id="l"></ul>
 <div class="foot"><span id="c"></span><button id="x">Wyczyść listę</button></div>
-<p class="foot"><a href="/ustawienia" style="color:inherit">Ustawienia</a></p>
+<p class="foot"><a href="/ustawienia" style="color:inherit">Ustawienia</a>
+<a href="/nagranie" style="color:inherit">Ostatnie nagranie</a></p>
 </main><script>
 const l=document.getElementById('l'),c=document.getElementById('c');
 async function api(p,b){const r=await fetch(p,{method:b?'POST':'GET',body:b});render(await r.json())}
@@ -86,9 +90,41 @@ void begin(void (*onChange)()) {
         sendList();
     });
     settings::registerRoutes(server, "/ustawienia");
+    server.on("/nagranie", HTTP_GET, [] {
+        String h = "<!doctype html><meta charset=utf-8><meta name=viewport content='width=device-width'>"
+                   "<body style='font:17px system-ui;padding:16px;max-width:520px;margin:auto'>"
+                   "<p><a href='/'>&larr; Lista</a></p><h2>Ostatnie nagranie</h2>";
+        if (!lastWav) {
+            h += "<p>Brak nagrań od uruchomienia.</p>";
+        } else {
+            String t = lastText;
+            t.replace("&", "&amp;");
+            t.replace("<", "&lt;");
+            h += "<audio controls src='/ostatnie.wav' style='width:100%'></audio>"
+                 "<p>Rozpoznany tekst:</p><p style='font-size:22px'><b>" +
+                 (t.length() ? t : String("(nic)")) + "</b></p>";
+        }
+        server.send(200, "text/html; charset=utf-8", h);
+    });
+    server.on("/ostatnie.wav", HTTP_GET, [] {
+        if (!lastWav) {
+            server.send(404, "text/plain", "brak");
+            return;
+        }
+        server.setContentLength(lastWavLen);
+        server.send(200, "audio/wav", "");
+        server.sendContent(reinterpret_cast<const char*>(lastWav), lastWavLen);
+    });
     server.begin();
 }
 
 void loop() { server.handleClient(); }
+
+void setLastRecording(uint8_t* wav, size_t len, const String& recognized) {
+    free(lastWav);
+    lastWav = wav;
+    lastWavLen = len;
+    lastText = recognized;
+}
 
 }  // namespace web
