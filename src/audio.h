@@ -14,6 +14,8 @@ struct RecordStats {
     int32_t level = 0;      // 99,9 percentyl przed normalizacją
     float gain = 1;         // zastosowane wzmocnienie programowe
     bool rightChannel = false;
+    int32_t dc = 0;               // składowa stała (usunięta przed normalizacją)
+    int32_t clippedPermille = 0;  // ile promili próbek było na granicy zakresu (przester)
     bool silent = false;    // za cicho, żeby wysyłać do rozpoznania
     uint32_t ms = 0;
 };

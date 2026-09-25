@@ -55,12 +55,12 @@ String transcribe(const uint8_t* wav, size_t wavLen, const std::vector<std::stri
     memcpy(body + head.length() + wavLen, tail.c_str(), tail.length());
 
     String contentType = String("multipart/form-data; boundary=") + kBoundary;
-    String response;
+    String response, netError;
     const int status = net::request("POST", c.sttUrl, contentType.c_str(), body, total, response,
-                                    c.sttKey.c_str(), 30000);
+                                    c.sttKey.c_str(), 30000, &netError);
     free(body);
 
-    if (status < 0) return fail("brak połączenia z " + c.sttUrl);
+    if (status < 0) return fail("brak połączenia z " + c.sttUrl + " (" + netError + ")");
     if (status != 200) {
         // Np. 401 = zły klucz, 429 = limit zapytań; treść błędu z API skracamy.
         return fail("HTTP " + String(status) + ": " + response.substring(0, 200));

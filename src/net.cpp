@@ -50,7 +50,8 @@ esp_err_t onEvent(esp_http_client_event_t* evt) {
 }  // namespace
 
 int request(const char* method, const String& url, const char* contentType, const uint8_t* body,
-            size_t bodyLen, String& response, const char* bearerToken, int timeoutMs) {
+            size_t bodyLen, String& response, const char* bearerToken, int timeoutMs,
+            String* error) {
     response = "";
     esp_http_client_config_t cfg = {};
     cfg.url = url.c_str();
@@ -75,7 +76,15 @@ int request(const char* method, const String& url, const char* contentType, cons
     }
     const esp_err_t err = esp_http_client_perform(client);
     const int status = err == ESP_OK ? esp_http_client_get_status_code(client) : -1;
-    if (err != ESP_OK) log_e("HTTP %s %s: %s", method, url.c_str(), esp_err_to_name(err));
+    if (err != ESP_OK) {
+        // Szczegóły do diagnostyki: kod błędu ESP, errno gniazda i wolna pamięć wewnętrzna
+        // (TLS potrzebuje kilkudziesięciu kB).
+        const String why = String(esp_err_to_name(err)) + ", errno " +
+                           String(esp_http_client_get_errno(client)) + ", wolna pamięć " +
+                           String(heap_caps_get_free_size(MALLOC_CAP_INTERNAL) / 1024) + " kB";
+        log_e("HTTP %s %s: %s", method, url.c_str(), why.c_str());
+        if (error) *error = why;
+    }
     esp_http_client_cleanup(client);
     return status;
 }

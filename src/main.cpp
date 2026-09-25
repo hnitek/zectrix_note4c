@@ -122,7 +122,9 @@ void handleVoice() {
     }
     const String diag = "szczyt " + String(rs.rawPeak) + ", poziom " + String(rs.level) +
                         ", wzmocnienie " + String(rs.gain, 1) + "x, kanał " +
-                        (rs.rightChannel ? "prawy" : "lewy") + ", " + String(rs.ms) + " ms";
+                        (rs.rightChannel ? "prawy" : "lewy") + ", przester " +
+                        String(rs.clippedPermille / 10.0f, 1) + "%, DC " + String(rs.dc) + ", " +
+                        String(rs.ms) + " ms";
     if (rs.silent) {
         // Whisper na ciszy "zmyśla" tekst, więc jej nie wysyłamy; zostaje do odsłuchu w /nagranie.
         web::setLastRecording(wav, wavLen, "", "Cisza – mikrofon nic nie złapał (" + diag + ")");

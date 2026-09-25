@@ -15,6 +15,6 @@ String ipAddress();
 // Zwraca kod HTTP (lub <0 przy błędzie), treść odpowiedzi w `response`.
 int request(const char* method, const String& url, const char* contentType, const uint8_t* body,
             size_t bodyLen, String& response, const char* bearerToken = nullptr,
-            int timeoutMs = 15000);
+            int timeoutMs = 15000, String* error = nullptr);
 
 }  // namespace net

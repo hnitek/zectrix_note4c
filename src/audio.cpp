@@ -41,7 +41,7 @@ bool initCodec() {
         // Start ADC + DAC
         {0x17, 0xBF}, {0x0E, 0x02}, {0x12, 0x00}, {0x14, 0x1A}, {0x0D, 0x01},
         {0x15, 0x40}, {0x37, 0x08}, {0x45, 0x00},
-        {0x16, 0x07},                // cyfrowe wzmocnienie ADC 42 dB (przy 30 dB mikrofon był za cichy)
+        {0x16, 0x05},                // cyfrowe wzmocnienie ADC 30 dB (jak w firmware xiaozhi dla tej płytki)
         {0x32, 0xB4},                // głośność DAC
         {0x31, 0x00},                // bez wyciszenia
     };
@@ -159,10 +159,31 @@ uint8_t* recordWav(size_t& wavLen, uint32_t maxMs, bool (*stillRecording)(), Rec
     if (energyR > energyL) memcpy(mono, right, frames * 2);
     free(right);
 
+    // Przesterowanie (próbki na granicy zakresu) i składowa stała – do diagnostyki.
+    int64_t sum = 0;
+    size_t clipped = 0;
+    for (size_t i = 0; i < frames; ++i) {
+        sum += mono[i];
+        if (mono[i] >= 32000 || mono[i] <= -32000) ++clipped;
+    }
+    const int32_t dc = frames ? int32_t(sum / int64_t(frames)) : 0;
+    stats.dc = dc;
+    stats.clippedPermille = frames ? int32_t(clipped * 1000 / frames) : 0;
+    // Usunięcie składowej stałej (przesunięcia od zera), żeby nie zawyżała poziomu.
+    if (dc != 0) {
+        for (size_t i = 0; i < frames; ++i) {
+            mono[i] = int16_t(std::max<int32_t>(-32768, std::min<int32_t>(32767, mono[i] - dc)));
+        }
+    }
+
     // Poziom liczony jako 99,9 percentyl (z dokładnością do 16), żeby pojedynczy trzask
     // przycisku nie zaniżał wzmocnienia.
-    static uint32_t hist[2048];
-    memset(hist, 0, sizeof(hist));
+    // W PSRAM – wewnętrzny RAM zostaje dla TLS przy wysyłce do rozpoznawania.
+    uint32_t* hist = static_cast<uint32_t*>(ps_calloc(2048, sizeof(uint32_t)));
+    if (!hist) {
+        free(wav);
+        return nullptr;
+    }
     int32_t rawPeak = 0;
     for (size_t i = 0; i < frames; ++i) {
         const int32_t v = abs(mono[i]);
@@ -178,6 +199,7 @@ uint8_t* recordWav(size_t& wavLen, uint32_t maxMs, bool (*stillRecording)(), Rec
             break;
         }
     }
+    free(hist);
     stats.rawPeak = rawPeak;
     stats.level = level;
     stats.rightChannel = energyR > energyL;
