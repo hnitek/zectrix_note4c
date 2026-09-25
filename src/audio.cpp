@@ -11,7 +11,9 @@ namespace {
 
 I2SClass i2s;
 bool ready = false;
-constexpr int32_t kSilencePeak = 300;   // poniżej tego szczytu uznajemy nagranie za ciszę
+// Poziom (99,9 percentyl) poniżej którego nagranie to cisza: ok. -60 dBFS po wszystkich wzmocnieniach.
+constexpr int32_t kSilenceLevel = 32;
+constexpr float kMaxGain = 32.0f;
 constexpr uint32_t kMinRecordMs = 300;  // krótkie kliknięcie i tak nagra tyle
 constexpr uint32_t kPostRollMs = 350;   // dograwanie po puszczeniu przycisku
 
@@ -39,7 +41,7 @@ bool initCodec() {
         // Start ADC + DAC
         {0x17, 0xBF}, {0x0E, 0x02}, {0x12, 0x00}, {0x14, 0x1A}, {0x0D, 0x01},
         {0x15, 0x40}, {0x37, 0x08}, {0x45, 0x00},
-        {0x16, 0x05},                // wzmocnienie mikrofonu 30 dB
+        {0x16, 0x07},                // cyfrowe wzmocnienie ADC 42 dB (przy 30 dB mikrofon był za cichy)
         {0x32, 0xB4},                // głośność DAC
         {0x31, 0x00},                // bez wyciszenia
     };
@@ -118,8 +120,9 @@ bool begin() {
     return ready;
 }
 
-uint8_t* recordWav(size_t& wavLen, uint32_t maxMs, bool (*stillRecording)()) {
+uint8_t* recordWav(size_t& wavLen, uint32_t maxMs, bool (*stillRecording)(), RecordStats& stats) {
     wavLen = 0;
+    stats = RecordStats{};
     if (!ready) return nullptr;
     const size_t maxFrames = kSampleRate * maxMs / 1000;
     uint8_t* wav = static_cast<uint8_t*>(ps_malloc(44 + maxFrames * 2));
@@ -156,36 +159,42 @@ uint8_t* recordWav(size_t& wavLen, uint32_t maxMs, bool (*stillRecording)()) {
     if (energyR > energyL) memcpy(mono, right, frames * 2);
     free(right);
 
-    // Szczyt liczony jako 99,9 percentyl, żeby pojedynczy trzask przycisku
-    // nie zaniżał wzmocnienia.
-    static uint32_t hist[128];
+    // Poziom liczony jako 99,9 percentyl (z dokładnością do 16), żeby pojedynczy trzask
+    // przycisku nie zaniżał wzmocnienia.
+    static uint32_t hist[2048];
     memset(hist, 0, sizeof(hist));
-    for (size_t i = 0; i < frames; ++i) hist[std::min(127, abs(mono[i]) >> 8)]++;
-    int32_t peak = 1;
+    int32_t rawPeak = 0;
+    for (size_t i = 0; i < frames; ++i) {
+        const int32_t v = abs(mono[i]);
+        rawPeak = std::max(rawPeak, v);
+        hist[std::min<int32_t>(2047, v >> 4)]++;
+    }
+    int32_t level = 1;
     size_t above = 0;
-    for (int b = 127; b >= 0; --b) {
+    for (int b = 2047; b >= 0; --b) {
         above += hist[b];
         if (above > frames / 1000) {
-            peak = std::max<int32_t>(1, (b + 1) << 8);
+            level = std::max<int32_t>(1, (b + 1) << 4);
             break;
         }
     }
-    if (peak < kSilencePeak) {
-        // Whisper na ciszy potrafi "zmyślić" tekst – nie wysyłamy jej wcale.
-        log_w("Cisza (szczyt %d) – pomijam", int(peak));
-        free(wav);
-        return nullptr;
-    }
-    // Normalizacja do ok. -6 dBFS, z miękkim ograniczeniem pojedynczych szczytów.
-    const float gain = std::min(10.0f, 16000.0f / peak);
+    stats.rawPeak = rawPeak;
+    stats.level = level;
+    stats.rightChannel = energyR > energyL;
+    stats.ms = frames * 1000 / kSampleRate;
+    stats.silent = level < kSilenceLevel;
+    // Normalizacja do ok. -6 dBFS (także przy "ciszy", żeby dało się ją odsłuchać).
+    const float gain = std::min(kMaxGain, 16000.0f / level);
+    stats.gain = gain;
     for (size_t i = 0; i < frames; ++i) {
         float v = mono[i] * gain;
         if (v > 30000.0f) v = 30000.0f + (v - 30000.0f) * 0.1f;
         if (v < -30000.0f) v = -30000.0f + (v + 30000.0f) * 0.1f;
         mono[i] = int16_t(std::max(-32767.0f, std::min(32767.0f, v)));
     }
-    log_i("Nagrano %u ms, szczyt %d, wzmocnienie %.1f", unsigned(frames * 1000 / kSampleRate),
-          int(peak), gain);
+    log_i("Nagrano %u ms, szczyt %d, poziom %d, wzmocnienie %.1f, kanał %s%s", unsigned(stats.ms),
+          int(rawPeak), int(level), gain, stats.rightChannel ? "P" : "L",
+          stats.silent ? " – CISZA" : "");
 
     writeWavHeader(wav, frames * 2);
     wavLen = 44 + frames * 2;

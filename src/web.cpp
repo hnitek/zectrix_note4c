@@ -14,6 +14,7 @@ void (*changed)() = nullptr;
 uint8_t* lastWav = nullptr;
 size_t lastWavLen = 0;
 String lastText;
+String lastDiag;
 
 const char kPage[] PROGMEM = R"HTML(<!doctype html>
 <html lang="pl"><head><meta charset="utf-8">
@@ -102,7 +103,8 @@ void begin(void (*onChange)()) {
             t.replace("<", "&lt;");
             h += "<audio controls src='/ostatnie.wav' style='width:100%'></audio>"
                  "<p>Rozpoznany tekst:</p><p style='font-size:22px'><b>" +
-                 (t.length() ? t : String("(nic)")) + "</b></p>";
+                 (t.length() ? t : String("(nic)")) + "</b></p><p style='color:#777;font-size:14px'>" +
+                 lastDiag + "</p>";
         }
         server.send(200, "text/html; charset=utf-8", h);
     });
@@ -120,11 +122,12 @@ void begin(void (*onChange)()) {
 
 void loop() { server.handleClient(); }
 
-void setLastRecording(uint8_t* wav, size_t len, const String& recognized) {
+void setLastRecording(uint8_t* wav, size_t len, const String& recognized, const String& diagnostics) {
     free(lastWav);
     lastWav = wav;
     lastWavLen = len;
     lastText = recognized;
+    lastDiag = diagnostics;
 }
 
 }  // namespace web

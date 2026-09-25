@@ -113,8 +113,19 @@ void handleVoice() {
     }
     led(true);  // dioda świeci = nagrywam, można mówić od razu
     size_t wavLen = 0;
-    uint8_t* wav = audio::recordWav(wavLen, kMaxRecordMs, talkButtonHeld);
+    audio::RecordStats rs;
+    uint8_t* wav = audio::recordWav(wavLen, kMaxRecordMs, talkButtonHeld, rs);
     if (!wav) {
+        led(false);
+        audio::beepError();
+        return;
+    }
+    const String diag = "szczyt " + String(rs.rawPeak) + ", poziom " + String(rs.level) +
+                        ", wzmocnienie " + String(rs.gain, 1) + "x, kanał " +
+                        (rs.rightChannel ? "prawy" : "lewy") + ", " + String(rs.ms) + " ms";
+    if (rs.silent) {
+        // Whisper na ciszy "zmyśla" tekst, więc jej nie wysyłamy; zostaje do odsłuchu w /nagranie.
+        web::setLastRecording(wav, wavLen, "", "Cisza – mikrofon nic nie złapał (" + diag + ")");
         led(false);
         audio::beepError();
         return;
@@ -128,7 +139,7 @@ void handleVoice() {
     }
     const String text = stt::transcribe(wav, wavLen, state::listItems());
     // Ostatnie nagranie do odsłuchu w panelu WWW (diagnostyka jakości mikrofonu).
-    web::setLastRecording(wav, wavLen, text);
+    web::setLastRecording(wav, wavLen, text, diag);
     led(false);
     if (text.isEmpty()) {
         audio::beepError();
