@@ -9,7 +9,8 @@
 #include "board.h"
 #include "epd.h"
 #include "net.h"
-#include "secrets.h"
+#include "config.h"
+#include "settings.h"
 #include "state.h"
 #include "stt.h"
 #include "ui.h"
@@ -86,7 +87,26 @@ bool updateWeather() {
     return changed;
 }
 
+// Po zmianie miasta współrzędne trzeba wyszukać (wymaga internetu).
+void ensureLocation() {
+    if (config::hasLocation()) return;
+    Config& c = config::get();
+    double lat, lon;
+    if (weather::geocode(c.place, lat, lon)) {
+        c.lat = lat;
+        c.lon = lon;
+        config::save();
+    }
+}
+
 void handleVoice() {
+    if (config::get().sttKey.isEmpty()) {
+        audio::beepError();
+        setFooter("Brak klucza API: http://" + net::ipAddress() + "/ustawienia");
+        requestRefresh();
+        while (talkButtonHeld()) delay(10);
+        return;
+    }
     led(true);
     audio::beepStart();
     size_t wavLen = 0;
@@ -147,6 +167,7 @@ void setup() {
     log_i("Start lodówki");
 
     dataMutex = xSemaphoreCreateMutex();
+    config::begin();
     state::begin();
     epd.begin();
     ui::begin(epd);
@@ -154,16 +175,26 @@ void setup() {
 
     xTaskCreatePinnedToCore(displayTaskFn, "display", 8192, nullptr, 1, &displayTask, 0);
 
-    if (!net::connect(20000)) {
-        ui::renderMessage("Brak Wi-Fi",
-                          String("Nie mogę połączyć się z siecią \"") + WIFI_SSID +
-                              "\". Sprawdź include/secrets.h (tylko sieci 2.4 GHz). "
-                              "Ponawiam w tle.");
+    // Tryb konfiguracji: brak ustawień, przycisk "w górę" trzymany przy starcie
+    // albo zapisana sieć nie odpowiada.
+    const bool forceSetup = buttonHeld(PIN_BTN_UP);
+    if (!config::hasWifi() || forceSetup || !net::connect(30000)) {
+        const String reason =
+            !config::hasWifi() || forceSetup
+                ? String("")
+                : String("Nie mogę połączyć się z siecią \"") + config::get().ssid + "\".\n";
+        ui::renderMessage("Konfiguracja",
+                          reason + "1. Połącz telefon z siecią Wi-Fi \"" + config::kSetupSsid +
+                              "\".\n2. Otwórz http://192.168.4.1 (zwykle otworzy się samo).\n"
+                              "3. Podaj sieć Wi-Fi, miasto i klucz API.");
         epd.display();
+        led(false);
+        settings::runSetupPortal();  // nie wraca – restart po zapisaniu
     } else {
         // Czekamy chwilę na czas z NTP, żeby nagłówek miał datę.
         struct tm t;
         if (getLocalTime(&t, 5000)) lastDay = t.tm_mday;
+        ensureLocation();
         updateWeather();
         setFooter("Telefon: http://" + net::ipAddress());
         requestRefresh();
@@ -201,6 +232,7 @@ void loop() {
     const bool connected = net::isConnected();
     if (connected && !wasConnected) {
         net::startServices();
+        ensureLocation();
         lastWeather = millis() - kWeatherIntervalMs;  // pogoda od razu po powrocie sieci
         redrawAfterReconnect = true;                  // m.in. zdejmuje ekran "Brak Wi-Fi"
     }

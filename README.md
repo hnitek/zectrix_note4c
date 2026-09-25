@@ -51,51 +51,58 @@ W polu tekstowym panelu WWW możesz wpisywać te same polecenia.
 > E-papier odświeża się w pełnych kolorach ok. **20–25 s**, a ekran w tym czasie mruga. To normalne.
 > Dlatego ekran odświeża się tylko po zmianie listy, zmianie pogody (sprawdzanej co 30 min) i o północy.
 
-## Instalacja
+## Instalacja z przeglądarki (bez instalowania czegokolwiek)
 
-### 1. Narzędzia
+Gotowy plik: [`firmware/lodowka-note4c.bin`](firmware/lodowka-note4c.bin) (obraz od adresu `0x0`).
 
-Zainstaluj [VS Code](https://code.visualstudio.com/) z rozszerzeniem **PlatformIO IDE**
-albo samo PlatformIO z linii poleceń: `pip install platformio`.
+1. Podłącz NOTE4C kablem USB-C (kabel musi przesyłać dane, nie tylko ładować) i włącz urządzenie.
+2. Otwórz w **Chrome** albo **Edge** stronę <https://espressif.github.io/esptool-js/>
+   (Firefox i Safari nie obsługują WebSerial).
+3. Ustaw *Baudrate* na `921600` i kliknij **Connect**. Wybierz port urządzenia
+   (np. „USB JTAG/serial debug unit”, na Windows `COMx`, na macOS `cu.usbmodem…`).
+   - Jeśli port się nie pojawia albo połączenie się nie udaje, wejdź w tryb bootloadera:
+     wyłącz urządzenie, przytrzymaj **środkowy przycisk**, włącz je (albo podłącz USB) i puść przycisk.
+4. Kliknij **Erase Flash** i poczekaj do końca. To usuwa fabryczne oprogramowanie i stare ustawienia.
+5. W sekcji *Program*: *Flash Address* = `0x0`, wybierz plik `lodowka-note4c.bin`, kliknij **Program**.
+6. Po komunikacie o zakończeniu kliknij **Disconnect**, odłącz USB i włącz urządzenie ponownie
+   (albo wciśnij przycisk zasilania).
 
-### 2. Konfiguracja
+> **Uwaga:** krok 4 bezpowrotnie usuwa fabryczny firmware. Fabryczne oprogramowanie i firmware'y
+> społeczności są dostępne u producenta ([zectrix.com/en/open-source.html](https://zectrix.com/en/open-source.html)).
+> Jeśli masz PlatformIO/esptool, możesz najpierw zrobić pełną kopię:
+> `esptool --chip esp32s3 read-flash 0 0x1000000 note4c_backup.bin`.
+
+## Pierwsze uruchomienie – konfiguracja
+
+Przy pierwszym starcie ekran pokaże **„Konfiguracja”**, a urządzenie utworzy własną sieć Wi-Fi.
+
+1. Połącz telefon z siecią **`Lodowka-Setup`** (bez hasła).
+2. Strona ustawień zwykle otworzy się sama; jeśli nie, wejdź na `http://192.168.4.1`.
+3. Podaj:
+   - **sieć Wi-Fi i hasło**: musi być to sieć **2,4 GHz**, bo ESP32 nie obsługuje 5 GHz,
+   - **miasto** do prognozy pogody (np. „Kraków”); współrzędne wyszuka się automatycznie,
+   - **klucz API** do rozpoznawania mowy. Dla Groq: załóż konto na
+     [console.groq.com](https://console.groq.com/keys), wejdź w *API Keys* → *Create API Key*
+     i skopiuj klucz (`gsk_...`).
+4. Kliknij **Zapisz**. Urządzenie uruchomi się ponownie i po ok. minucie pokaże pogodę i listę.
+
+Ustawienia możesz zmienić później pod `http://lodowka.local/ustawienia` (albo `http://<IP>/ustawienia`;
+IP widać na dole ekranu po starcie). Do trybu konfiguracji wejdziesz też, trzymając
+**przycisk w górę** podczas włączania. Jeśli zapisana sieć nie odpowiada, urządzenie samo włączy
+tryb konfiguracji i dalej będzie próbowało się z nią połączyć.
+
+## Budowanie samodzielnie (PlatformIO)
 
 ```bash
-cp include/secrets.example.h include/secrets.h
+pip install platformio
+pio run -e note4c -t upload     # kompilacja i wgranie
+pio device monitor              # logi (115200)
+pio test -e native              # testy parsera poleceń na komputerze
 ```
 
-W `include/secrets.h` uzupełnij:
-- `WIFI_SSID` / `WIFI_PASSWORD`: sieć **2,4 GHz** (ESP32 nie obsługuje 5 GHz),
-- `WEATHER_LAT` / `WEATHER_LON` / `WEATHER_PLACE`: Twoja lokalizacja,
-- `STT_KEY`: klucz API do rozpoznawania mowy. Dla Groq: załóż konto na
-  [console.groq.com](https://console.groq.com/keys) i utwórz klucz (`gsk_...`).
-
-Plik `secrets.h` jest w `.gitignore`, więc nie trafi do repozytorium.
-
-### 3. Wgranie
-
-Podłącz NOTE4C kablem USB-C i włącz urządzenie. Potem:
-
-```bash
-pio run -e note4c -t upload
-pio device monitor        # logi (115200)
-```
-
-Jeśli port się nie pojawia albo wgrywanie nie startuje, wejdź w tryb bootloadera: przytrzymaj
-**środkowy przycisk (BOOT)**, włącz zasilanie albo podłącz USB, potem puść.
-
-> **Uwaga:** wgranie tego firmware'u zastępuje fabryczne oprogramowanie. Jeśli chcesz mieć
-> możliwość powrotu, zrób najpierw kopię:
-> `esptool.py --chip esp32s3 read_flash 0 0x1000000 note4c_backup.bin`
-> (przywracanie: `esptool.py --chip esp32s3 write_flash 0 note4c_backup.bin`).
-
-### 4. Testy parsera (opcjonalnie)
-
-Logika poleceń głosowych jest w czystym C++ i ma testy uruchamiane na komputerze:
-
-```bash
-pio test -e native
-```
+Opcjonalnie możesz wpisać ustawienia domyślne na etapie kompilacji:
+`cp include/secrets.example.h include/secrets.h`.
+Plik ten jest w `.gitignore`. Nie dodawaj go do publicznego pliku `.bin`.
 
 ## Zasilanie
 
@@ -115,6 +122,7 @@ zasilać urządzenie z ładowarki USB-C (cienki kabel płaski dobrze się sprawd
 | `src/weather.*` | Open-Meteo i opisy pogody po polsku |
 | `src/web.*` | panel WWW i REST API (`/api/list`, `/api/add`, `/api/remove`, `/api/clear`) |
 | `src/state.*` | lista zakupów zapisywana w NVS |
+| `src/config.*`, `src/settings.*` | ustawienia w NVS, portal konfiguracyjny i strona `/ustawienia` |
 | `lib/shopping/` | parser polskich poleceń i logika listy (testowane w `test/`) |
 | `include/board.h` | pinout NOTE4C |
 
@@ -129,6 +137,6 @@ ze sterownika `esp_codec_dev` od Espressif.
   kodek nie odpowiada. Zajrzyj do logów w `pio device monitor`.
 - **„Nie zrozumiałem: …” na ekranie**: rozpoznany tekst nie pasował do żadnego polecenia. Mów bliżej
   urządzenia, zaczynając od „dodaj” albo „usuń”.
-- **`STT HTTP 401`** w logach: nieprawidłowy `STT_KEY`.
+- **„Brak klucza API” na ekranie / `STT HTTP 401` w logach**: popraw klucz w `/ustawienia`.
 - **Ekran się nie odświeża / `EPD busy timeout`**: sprawdź, czy masz NOTE4C (czterokolorowy).
   Wersja NOTE4 (czarno-biała) ma inny panel i ten sterownik na niej nie zadziała.

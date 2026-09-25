@@ -3,7 +3,7 @@
 #include <ArduinoJson.h>
 
 #include "net.h"
-#include "secrets.h"
+#include "config.h"
 
 namespace stt {
 
@@ -22,8 +22,13 @@ void addField(String& s, const char* name, const char* value) {
 }  // namespace
 
 String transcribe(const uint8_t* wav, size_t wavLen) {
+    const Config& c = config::get();
+    if (c.sttKey.isEmpty()) {
+        log_e("Brak klucza API do rozpoznawania mowy (ustaw w /ustawienia)");
+        return "";
+    }
     String head;
-    addField(head, "model", STT_MODEL);
+    addField(head, "model", c.sttModel.c_str());
     addField(head, "language", "pl");
     addField(head, "response_format", "json");
     head += "--";
@@ -43,8 +48,8 @@ String transcribe(const uint8_t* wav, size_t wavLen) {
 
     String contentType = String("multipart/form-data; boundary=") + kBoundary;
     String response;
-    const int status = net::request("POST", STT_URL, contentType.c_str(), body, total, response,
-                                    STT_KEY, 30000);
+    const int status = net::request("POST", c.sttUrl, contentType.c_str(), body, total, response,
+                                    c.sttKey.c_str(), 30000);
     free(body);
 
     if (status != 200) {

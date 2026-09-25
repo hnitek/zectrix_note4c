@@ -22,6 +22,9 @@ namespace weather {
 
 bool fetch(Weather& out);
 
+// Wyszukuje współrzędne miejscowości (Open-Meteo Geocoding).
+bool geocode(const String& place, double& lat, double& lon);
+
 // Opis po polsku dla kodu WMO.
 const char* describe(int code);
 

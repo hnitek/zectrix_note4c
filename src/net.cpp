@@ -5,17 +5,18 @@
 #include <esp_crt_bundle.h>
 #include <esp_http_client.h>
 
-#include "secrets.h"
+#include "config.h"
 
 namespace net {
 
 bool connect(uint32_t timeoutMs) {
     WiFi.mode(WIFI_STA);
-    WiFi.setHostname(HOSTNAME);
+    WiFi.setHostname(config::kHostname);
     WiFi.setAutoReconnect(true);
-    WiFi.begin(WIFI_SSID, WIFI_PASSWORD);
+    const Config& c = config::get();
+    WiFi.begin(c.ssid.c_str(), c.pass.c_str());
     // SNTP synchronizuje się sam, gdy tylko sieć będzie dostępna.
-    configTzTime(TIMEZONE, "pool.ntp.org", "time.google.com");
+    configTzTime(c.tz.c_str(), "pool.ntp.org", "time.google.com");
     const uint32_t start = millis();
     while (WiFi.status() != WL_CONNECTED) {
         if (millis() - start > timeoutMs) return false;
@@ -27,7 +28,7 @@ bool connect(uint32_t timeoutMs) {
 
 void startServices() {
     static bool mdnsStarted = false;
-    if (!mdnsStarted && MDNS.begin(HOSTNAME)) {
+    if (!mdnsStarted && MDNS.begin(config::kHostname)) {
         MDNS.addService("http", "tcp", 80);
         mdnsStarted = true;
     }

@@ -1,6 +1,9 @@
 #pragma once
 
-// Skopiuj ten plik do include/secrets.h i uzupełnij. secrets.h jest w .gitignore.
+// OPCJONALNE. Ustawienia zwykle podaje się po wgraniu firmware'u, na stronie konfiguracyjnej
+// (sieć "Lodowka-Setup") albo w panelu WWW: /ustawienia.
+// Jeśli budujesz firmware samodzielnie i chcesz od razu wpisać wartości domyślne,
+// skopiuj ten plik do include/secrets.h (jest w .gitignore).
 
 // --- Wi-Fi (tylko 2.4 GHz) ---
 #define WIFI_SSID     "MojaSiec"
@@ -25,5 +28,3 @@
 // #define STT_MODEL "gpt-4o-mini-transcribe"
 // #define STT_KEY   "sk-..."
 
-// Nazwa w sieci lokalnej: panel dostępny pod http://lodowka.local
-#define HOSTNAME "lodowka"

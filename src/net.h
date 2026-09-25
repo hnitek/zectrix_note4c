@@ -6,7 +6,7 @@ namespace net {
 
 // Wi-Fi + NTP + mDNS. Blokuje do połączenia (max timeoutMs).
 bool connect(uint32_t timeoutMs);
-// mDNS (http://<HOSTNAME>.local); wywołaj po (ponownym) połączeniu.
+// mDNS (http://lodowka.local); wywołaj po (ponownym) połączeniu.
 void startServices();
 bool isConnected();
 String ipAddress();

@@ -3,13 +3,51 @@
 #include <ArduinoJson.h>
 
 #include "net.h"
-#include "secrets.h"
+#include "config.h"
 
 namespace weather {
 
+namespace {
+String urlEncode(const String& s) {
+    String o;
+    const char* hex = "0123456789ABCDEF";
+    for (unsigned i = 0; i < s.length(); ++i) {
+        const uint8_t c = s[i];
+        if (isalnum(c) || c == '-' || c == '_' || c == '.') {
+            o += char(c);
+        } else {
+            o += '%';
+            o += hex[c >> 4];
+            o += hex[c & 15];
+        }
+    }
+    return o;
+}
+}  // namespace
+
+bool geocode(const String& place, double& lat, double& lon) {
+    String body;
+    const String url = "https://geocoding-api.open-meteo.com/v1/search?count=1&language=pl&name=" +
+                       urlEncode(place);
+    if (net::request("GET", url, nullptr, nullptr, 0, body) != 200) return false;
+    JsonDocument doc;
+    if (deserializeJson(doc, body.c_str(), body.length())) return false;
+    JsonObject r = doc["results"][0];
+    if (r.isNull()) {
+        log_e("Nie znaleziono miejscowości \"%s\"", place.c_str());
+        return false;
+    }
+    lat = r["latitude"];
+    lon = r["longitude"];
+    log_i("%s -> %.4f, %.4f", place.c_str(), lat, lon);
+    return true;
+}
+
 bool fetch(Weather& out) {
-    String url = "https://api.open-meteo.com/v1/forecast?latitude=" + String(WEATHER_LAT, 4) +
-                 "&longitude=" + String(WEATHER_LON, 4) +
+    const Config& c = config::get();
+    if (!config::hasLocation()) return false;
+    String url = "https://api.open-meteo.com/v1/forecast?latitude=" + String(c.lat, 4) +
+                 "&longitude=" + String(c.lon, 4) +
                  "&current=temperature_2m,apparent_temperature,relative_humidity_2m,"
                  "weather_code,wind_speed_10m"
                  "&daily=weather_code,temperature_2m_max,temperature_2m_min,"

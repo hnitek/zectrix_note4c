@@ -3,6 +3,7 @@
 #include <ArduinoJson.h>
 #include <WebServer.h>
 
+#include "settings.h"
 #include "state.h"
 
 namespace web {
@@ -36,6 +37,7 @@ li button{background:none;color:var(--acc);padding:6px 10px;font-size:20px}
 <form id="f"><input id="i" placeholder="np. mleko, chleb i masło" autocomplete="off"><button>Dodaj</button></form>
 <ul id="l"></ul>
 <div class="foot"><span id="c"></span><button id="x">Wyczyść listę</button></div>
+<p class="foot"><a href="/ustawienia" style="color:inherit">Ustawienia</a></p>
 </main><script>
 const l=document.getElementById('l'),c=document.getElementById('c');
 async function api(p,b){const r=await fetch(p,{method:b?'POST':'GET',body:b});render(await r.json())}
@@ -83,6 +85,7 @@ void begin(void (*onChange)()) {
         if (state::clear()) notifyChanged();
         sendList();
     });
+    settings::registerRoutes(server, "/ustawienia");
     server.begin();
 }
 
