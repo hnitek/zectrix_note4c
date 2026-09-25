@@ -7,13 +7,15 @@
 #include <vector>
 
 struct VoiceCommand {
-    enum class Kind { None, Add, Remove, Clear };
+    enum class Kind { None, Add, Remove, Clear, Undo };  // Undo: usuń ostatnio dodaną pozycję
     Kind kind = Kind::None;
     std::vector<std::string> items;  // już przycięte, pierwsza litera wielka
 };
 
 // "Dodaj mleko, chleb i masło" -> Add [Mleko, Chleb, Masło]
 // "Usuń mleko" / "Kupiłem chleb" -> Remove [...]
+// "Mleko kupione" / "Chleb już mam" / "Odhacz mleko" -> Remove
+// "Cofnij" / "Usuń ostatnie" -> Undo (usuwa ostatnio dodaną pozycję)
 // "Wyczyść listę" -> Clear
 // Samo "mleko i jajka" (bez czasownika) -> Add
 VoiceCommand parseVoiceCommand(const std::string& text);
@@ -41,7 +43,8 @@ public:
     void setItems(std::vector<std::string> items) { items_ = std::move(items); }
 
     bool add(const std::string& item);     // false, jeśli już jest na liście
-    bool remove(const std::string& item);  // false, jeśli nie znaleziono
+    // false, jeśli nie znaleziono; removedName dostaje nazwę pozycji z listy.
+    bool remove(const std::string& item, std::string* removedName = nullptr);
     bool removeAt(size_t index);
     void clear() { items_.clear(); }
 

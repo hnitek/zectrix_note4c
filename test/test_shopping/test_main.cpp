@@ -54,6 +54,36 @@ void test_remove() {
     assertItems(c, {"Jajka"});
 }
 
+void test_remove_suffix_and_more_verbs() {
+    auto c = parseVoiceCommand("Mleko kupione.");
+    TEST_ASSERT_TRUE(c.kind == Kind::Remove);
+    assertItems(c, {"Mleko"});
+    c = parseVoiceCommand("Chleb już mam");
+    TEST_ASSERT_TRUE(c.kind == Kind::Remove);
+    assertItems(c, {"Chleb"});
+    c = parseVoiceCommand("Masło i jajka usuń");
+    TEST_ASSERT_TRUE(c.kind == Kind::Remove);
+    assertItems(c, {"Masło", "Jajka"});
+    c = parseVoiceCommand("Odhacz mleko");
+    TEST_ASSERT_TRUE(c.kind == Kind::Remove);
+    c = parseVoiceCommand("Nie potrzeba mleka");
+    TEST_ASSERT_TRUE(c.kind == Kind::Remove);
+    assertItems(c, {"Mleka"});
+}
+
+void test_undo() {
+    TEST_ASSERT_TRUE(parseVoiceCommand("Cofnij.").kind == Kind::Undo);
+    TEST_ASSERT_TRUE(parseVoiceCommand("Usuń ostatnie").kind == Kind::Undo);
+    ShoppingList list;
+    list.apply(parseVoiceCommand("mleko, chleb"));
+    TEST_ASSERT_TRUE(list.apply(parseVoiceCommand("cofnij")));
+    TEST_ASSERT_EQUAL_size_t(1, list.items().size());
+    TEST_ASSERT_EQUAL_STRING("Mleko", list.items()[0].c_str());
+    // "nie potrzeba mleka" usuwa "Mleko" mimo odmiany
+    TEST_ASSERT_TRUE(list.apply(parseVoiceCommand("nie potrzeba mleka")));
+    TEST_ASSERT_EQUAL_size_t(0, list.items().size());
+}
+
 void test_clear() {
     TEST_ASSERT_TRUE(parseVoiceCommand("Wyczyść listę.").kind == Kind::Clear);
     TEST_ASSERT_TRUE(parseVoiceCommand("usuń wszystko z listy").kind == Kind::Clear);
@@ -112,6 +142,8 @@ int main() {
     RUN_TEST(test_add_to_list_phrase);
     RUN_TEST(test_add_need_phrases);
     RUN_TEST(test_remove);
+    RUN_TEST(test_remove_suffix_and_more_verbs);
+    RUN_TEST(test_undo);
     RUN_TEST(test_clear);
     RUN_TEST(test_empty);
     RUN_TEST(test_bare_item_is_add);

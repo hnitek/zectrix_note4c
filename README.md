@@ -44,7 +44,10 @@ niski ton = nie zrozumiałem albo błąd. Wynik ostatniego polecenia pojawia si�
 | „Mleko, chleb i masło” | dodaje 3 pozycje |
 | „Dodaj jajka i żółty ser” | też dodaje |
 | „Trzeba kupić ketchup” / „Skończyło się masło” | dodaje |
-| „Usuń mleko” / „Skreśl chleb” / „Kupiłem jajka” | usuwa (rozumie odmianę: „jajek” pasuje do „Jajka”) |
+| „Usuń mleko” / „Skreśl chleb” / „Kupiłem jajka” / „Odhacz masło” | usuwa (rozumie odmianę: „jajek” pasuje do „Jajka”) |
+| „Mleko kupione” / „Chleb już mam” / „Masło usuń” | też usuwa (czasownik na końcu) |
+| „Nie potrzeba mleka” | usuwa |
+| „Cofnij” / „Usuń ostatnie” | usuwa ostatnio dodaną pozycję (gdy coś źle się rozpoznało) |
 | „Wyczyść listę” | czyści wszystko |
 
 W polu tekstowym panelu WWW możesz wpisywać te same polecenia.

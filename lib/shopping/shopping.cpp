@@ -91,7 +91,22 @@ const std::vector<std::string> kClearPhrases = {
     "skasuj listę", "nowa lista",
 };
 
+// Czasownik po nazwie produktu: "mleko kupione", "chleb już mam". Dłuższe najpierw.
+const std::vector<std::string> kRemoveSuffixes = {
+    "już kupione", "już kupiony", "już kupiona", "już kupiłem", "już kupiłam", "już mamy", "już mam",
+    "już jest", "mamy już", "mam już", "do usunięcia", "niepotrzebne", "niepotrzebny", "kupione",
+    "kupiony", "kupiona", "kupiłem", "kupiłam", "kupiliśmy", "usuń", "skreśl", "wykreśl", "odhacz",
+    "mamy", "mam",
+};
+
+const std::vector<std::string> kUndoPhrases = {
+    "cofnij", "cofnij to", "cofnij ostatnie", "usuń ostatnie", "usuń ostatni", "usuń ostatnią",
+    "usuń ostatnią pozycję", "usuń ostatnią rzecz", "skasuj ostatnie", "to był błąd", "pomyłka",
+};
+
 const std::vector<std::string> kRemoveVerbs = {
+    "odhacz", "nie potrzeba", "nie trzeba", "nie kupuj", "nie kupujemy", "zdejmij", "zdejmij z listy",
+    "wyrzuć", "wyrzuć z listy",
     "usuń", "usuń z listy", "skreśl", "skreśl z listy", "wykreśl", "wykreśl z listy",
     "skasuj", "kupiłem", "kupiłam", "kupiliśmy", "mam już", "mamy już", "już mam",
     "już mamy", "kupione",
@@ -326,8 +341,22 @@ VoiceCommand parseVoiceCommand(const std::string& text) {
         }
     }
 
+    {
+        std::string t = s;
+        stripSuffix(t, kListWords);
+        for (const auto& phrase : kUndoPhrases) {
+            if (t == phrase) {
+                cmd.kind = VoiceCommand::Kind::Undo;
+                return cmd;
+            }
+        }
+    }
+
     if (stripPrefix(s, kRemoveVerbs)) {
         cmd.kind = VoiceCommand::Kind::Remove;
+    } else if (stripSuffix(s, kRemoveSuffixes)) {
+        cmd.kind = VoiceCommand::Kind::Remove;
+        stripSuffix(s, kListWords);  // "mleko z listy usuń"
     } else {
         stripPrefix(s, kAddVerbs);
         cmd.kind = VoiceCommand::Kind::Add;
@@ -352,14 +381,20 @@ bool ShoppingList::add(const std::string& item) {
     return true;
 }
 
-bool ShoppingList::remove(const std::string& item) {
+bool ShoppingList::remove(const std::string& item, std::string* removedName) {
     // Najpierw dokładne dopasowanie, potem przybliżone.
     const std::string n = normalizeText(item);
     for (size_t i = 0; i < items_.size(); ++i) {
-        if (normalizeText(items_[i]) == n) return removeAt(i);
+        if (normalizeText(items_[i]) == n) {
+            if (removedName) *removedName = items_[i];
+            return removeAt(i);
+        }
     }
     for (size_t i = 0; i < items_.size(); ++i) {
-        if (itemsMatch(items_[i], item)) return removeAt(i);
+        if (itemsMatch(items_[i], item)) {
+            if (removedName) *removedName = items_[i];
+            return removeAt(i);
+        }
     }
     return false;
 }
@@ -378,6 +413,10 @@ bool ShoppingList::apply(const VoiceCommand& cmd) {
             break;
         case VoiceCommand::Kind::Remove:
             for (const auto& i : cmd.items) changed |= remove(i);
+            break;
+        case VoiceCommand::Kind::Undo:
+            changed = !items_.empty();
+            if (changed) items_.pop_back();
             break;
         case VoiceCommand::Kind::Clear:
             changed = !items_.empty();

@@ -69,10 +69,15 @@ bool applyText(const std::string& text, String* summary) {
     } else if (cmd.kind == VoiceCommand::Kind::Remove) {
         std::vector<std::string> removed;
         for (const auto& item : cmd.items) {
-            if (list.remove(item)) removed.push_back(item);
+            std::string name;
+            if (list.remove(item, &name)) removed.push_back(name);
         }
         changed = !removed.empty();
         if (summary) *summary = changed ? "Usunięto: " + join(removed) : "Nie ma tego na liście";
+    } else if (cmd.kind == VoiceCommand::Kind::Undo) {
+        const std::string last = list.items().empty() ? "" : list.items().back();
+        changed = list.apply(cmd);
+        if (summary) *summary = changed ? String("Cofnięto: ") + last.c_str() : "Lista jest pusta";
     } else if (cmd.kind == VoiceCommand::Kind::Clear) {
         changed = list.apply(cmd);
         if (summary) *summary = "Lista wyczyszczona";
