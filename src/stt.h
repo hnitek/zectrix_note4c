@@ -14,4 +14,7 @@ namespace stt {
 String transcribe(const uint8_t* wav, size_t wavLen, const std::vector<std::string>& listItems,
                   String* error = nullptr);
 
+// Sprawdza klucz API zapytaniem o listę modeli (…/v1/models). Zwraca opis wyniku.
+String checkKey();
+
 }  // namespace stt

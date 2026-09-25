@@ -75,8 +75,11 @@ int request(const char* method, const String& url, const char* contentType, cons
         esp_http_client_set_post_field(client, reinterpret_cast<const char*>(body), bodyLen);
     }
     const esp_err_t err = esp_http_client_perform(client);
-    const int status = err == ESP_OK ? esp_http_client_get_status_code(client) : -1;
-    if (err != ESP_OK) {
+    int status = err == ESP_OK ? esp_http_client_get_status_code(client) : -1;
+    // Przy odpowiedzi 401 klient ESP-IDF próbuje sam obsłużyć autoryzację (Basic/Digest)
+    // i dla "Bearer" zwraca ESP_ERR_NOT_SUPPORTED – to w rzeczywistości odrzucony klucz.
+    if (err == ESP_ERR_NOT_SUPPORTED && esp_http_client_get_status_code(client) == 401) status = 401;
+    if (status < 0) {
         // Szczegóły do diagnostyki: kod błędu ESP, errno gniazda i wolna pamięć wewnętrzna
         // (TLS potrzebuje kilkudziesięciu kB).
         const String why = String(esp_err_to_name(err)) + ", errno " +

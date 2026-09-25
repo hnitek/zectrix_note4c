@@ -4,6 +4,7 @@
 #include <WiFi.h>
 
 #include "config.h"
+#include "stt.h"
 
 namespace settings {
 namespace {
@@ -70,6 +71,7 @@ border:0;border-radius:10px;background:var(--acc);color:#fff}a{color:var(--acc)}
     h += "<label>Klucz API</label><input name=\"key\" type=\"password\" autocomplete=\"off\"";
     h += c.sttKey.length() ? " placeholder=\"(bez zmian)\">" : " placeholder=\"gsk_...\">";
     h += "<small>Groq: załóż konto na console.groq.com i utwórz klucz w zakładce API Keys.</small>";
+    if (!setupMode) h += "<p><a href=\"/test-klucza\">Sprawdź zapisany klucz</a></p>";
     h += "<details><summary>Zaawansowane (dostawca „Inny”)</summary>";
     h += "<label>Adres API</label><input name=\"url\" value=\"" + esc(c.sttUrl) + "\">";
     h += "<label>Model</label><input name=\"model\" value=\"" + esc(c.sttModel) + "\">";
@@ -120,6 +122,14 @@ void registerRoutes(WebServer& server, const char* path) {
         server.send(200, "text/html; charset=utf-8", page(false, action));
     });
     server.on(path, HTTP_POST, [&server] { save(server); });
+    server.on("/test-klucza", HTTP_GET, [&server] {
+        String r = esc(stt::checkKey());
+        server.send(200, "text/html; charset=utf-8",
+                    "<!doctype html><meta charset=utf-8><meta name=viewport content='width=device-width'>"
+                    "<body style='font:18px system-ui;padding:16px;max-width:520px;margin:auto'>"
+                    "<p><a href='/ustawienia'>&larr; Ustawienia</a></p><h2>Test klucza API</h2><p>" +
+                        r + "</p></body>");
+    });
 }
 
 void runSetupPortal() {

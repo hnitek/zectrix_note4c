@@ -61,8 +61,9 @@ String transcribe(const uint8_t* wav, size_t wavLen, const std::vector<std::stri
     free(body);
 
     if (status < 0) return fail("brak połączenia z " + c.sttUrl + " (" + netError + ")");
+    if (status == 401) return fail("HTTP 401 – serwis odrzucił klucz API. Wklej go ponownie w /ustawienia i użyj \"Sprawdź klucz\"");
     if (status != 200) {
-        // Np. 401 = zły klucz, 429 = limit zapytań; treść błędu z API skracamy.
+        // Np. 429 = limit zapytań; treść błędu z API skracamy.
         return fail("HTTP " + String(status) + ": " + response.substring(0, 200));
     }
     JsonDocument doc;
@@ -75,6 +76,27 @@ String transcribe(const uint8_t* wav, size_t wavLen, const std::vector<std::stri
         return fail("odrzucone – serwis zwrócił podpowiedź zamiast mowy (\"" + text.substring(0, 60) + "...\")");
     }
     return text;
+}
+
+String checkKey() {
+    const Config& c = config::get();
+    if (c.sttKey.isEmpty()) return "Brak klucza – wpisz go w polu \"Klucz API\".";
+    String url = c.sttUrl;
+    const int i = url.indexOf("/audio/");
+    if (i < 0) return "Nie umiem sprawdzić klucza dla adresu " + url;
+    url = url.substring(0, i) + "/models";
+    String response, netError;
+    const int status = net::request("GET", url, nullptr, nullptr, 0, response, c.sttKey.c_str(), 15000,
+                                    &netError);
+    const String masked = c.sttKey.substring(0, 4) + "..." + c.sttKey.substring(c.sttKey.length() - 4) +
+                          " (" + String(c.sttKey.length()) + " znaków)";
+    if (status == 200) return "Klucz działa ✓ " + masked;
+    if (status == 401) {
+        return "Klucz odrzucony (401) ✗ " + masked +
+               ". Utwórz nowy klucz na console.groq.com/keys i wklej go w całości.";
+    }
+    if (status < 0) return "Brak połączenia z " + url + " (" + netError + ")";
+    return "Odpowiedź HTTP " + String(status) + ": " + response.substring(0, 150);
 }
 
 }  // namespace stt

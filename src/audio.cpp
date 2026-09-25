@@ -16,6 +16,8 @@ constexpr int32_t kSilenceLevel = 32;
 constexpr float kMaxGain = 32.0f;
 constexpr uint32_t kMinRecordMs = 300;  // krótkie kliknięcie i tak nagra tyle
 constexpr uint32_t kPostRollMs = 350;   // dograwanie po puszczeniu przycisku
+constexpr uint32_t kPressClickMs = 120;   // wyciszenie trzasku wciśnięcia
+constexpr uint32_t kReleaseClickMs = 120; // wyciszenie trzasku puszczenia
 
 bool writeReg(uint8_t reg, uint8_t val) {
     Wire.beginTransmission(ES8311_ADDR);
@@ -142,10 +144,14 @@ uint8_t* recordWav(size_t& wavLen, uint32_t maxMs, bool (*stillRecording)(), Rec
     double energyL = 0, energyR = 0;
     size_t frames = 0;
     uint32_t releasedAt = 0;
+    size_t releaseFrame = 0;
     const uint32_t start = millis();
     while (frames < maxFrames) {
         const uint32_t now = millis();
-        if (!releasedAt && now - start > kMinRecordMs && !stillRecording()) releasedAt = now;
+        if (!releasedAt && now - start > kMinRecordMs && !stillRecording()) {
+            releasedAt = now;
+            releaseFrame = frames;
+        }
         // Po puszczeniu przycisku nagrywamy jeszcze chwilę, żeby nie uciąć końcówki słowa.
         if (releasedAt && now - releasedAt > kPostRollMs) break;
         const size_t got = i2s.readBytes(reinterpret_cast<char*>(frame), sizeof(frame)) / 4;
@@ -174,6 +180,23 @@ uint8_t* recordWav(size_t& wavLen, uint32_t maxMs, bool (*stillRecording)(), Rec
         for (size_t i = 0; i < frames; ++i) {
             mono[i] = int16_t(std::max<int32_t>(-32768, std::min<int32_t>(32767, mono[i] - dc)));
         }
+    }
+    // Wyciszenie trzasków przycisku: na początku (wciśnięcie) i wokół puszczenia.
+    // Bez tego trzask (pełna skala) zaniżał normalizację i mowa zostawała cicha.
+    auto mute = [&](size_t from, size_t to) {
+        const size_t fade = kSampleRate / 100;  // 10 ms
+        to = std::min(to, frames);
+        for (size_t i = from; i < to; ++i) {
+            float g = 0.0f;
+            if (i < from + fade && from > 0) g = 1.0f - float(i - from) / fade;
+            if (i + fade > to && to < frames) g = std::max(g, 1.0f - float(to - i) / fade);
+            mono[i] = int16_t(mono[i] * g);
+        }
+    };
+    mute(0, kSampleRate * kPressClickMs / 1000);
+    if (releaseFrame) {
+        const size_t pre = kSampleRate * 50 / 1000, post = kSampleRate * kReleaseClickMs / 1000;
+        mute(releaseFrame > pre ? releaseFrame - pre : 0, releaseFrame + post);
     }
 
     // Poziom liczony jako 99,9 percentyl (z dokładnością do 16), żeby pojedynczy trzask
