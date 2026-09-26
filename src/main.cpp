@@ -9,6 +9,7 @@
 #include "board.h"
 #include "epd.h"
 #include "net.h"
+#include "cloud.h"
 #include "config.h"
 #include "settings.h"
 #include "state.h"
@@ -158,6 +159,7 @@ void handleVoice() {
     log_i("%s", summary.c_str());
     setFooter(summary);
     if (changed) {
+        cloud::requestSync();
         audio::beepOk();
     } else {
         audio::beepError();
@@ -167,7 +169,15 @@ void handleVoice() {
     while (talkButtonHeld()) delay(10);
 }
 
+// Zmiana w lokalnym panelu WWW: odśwież ekran i wyślij do aplikacji w telefonie.
 void onWebChange() {
+    listChangedAt = millis();
+    listDirty = true;
+    cloud::requestSync();
+}
+
+// Zmiana przyszła z aplikacji w telefonie (wywoływane z zadania synchronizacji).
+void onCloudChange() {
     listChangedAt = millis();
     listDirty = true;
 }
@@ -221,6 +231,7 @@ void setup() {
         setFooter("Telefon: http://" + net::ipAddress());
         requestRefresh();
     }
+    cloud::begin(onCloudChange);
     web::begin(onWebChange);
     led(false);
 }

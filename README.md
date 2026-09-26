@@ -130,6 +130,44 @@ bo wgranie go nadpisałoby ustawienia.
 > Jeśli trzeba wgrać coś kablem (np. urządzenie się nie uruchamia), użyj pełnego obrazu
 > `lodowka-note4c.bin` od `0x0`. Ustawienia trzeba wtedy podać od nowa.
 
+## Aplikacja w telefonie – odhaczanie w sklepie
+
+Panel `http://lodowka.local` działa tylko w domowym Wi-Fi. Żeby odhaczać zakupy w sklepie, lista
+może być synchronizowana z małą aplikacją w chmurze: Cloudflare Worker z bazą D1, plik
+[`cloud/worker.js`](cloud/worker.js). Darmowy plan Cloudflare w zupełności wystarcza.
+
+- W sklepie stukasz produkt i jest odhaczony. Po ok. minucie znika też z ekranu lodówki.
+- Co dodasz głosem na lodówce, pojawia się w telefonie. Co dopiszesz w telefonie, pojawia się na lodówce.
+- Wejście chroni hasło, a po zalogowaniu telefon pamięta sesję przez rok.
+- **„Wyślij SMS-em”** otwiera aplikację SMS z gotową listą, a odbiorcę wybierasz sam.
+  **„Udostępnij”** wysyła listę np. przez WhatsApp albo Messengera.
+- W przeglądarce użyj „Dodaj do ekranu głównego”, a aplikacja będzie działać jak zwykła ikona w telefonie.
+
+<img src="docs/aplikacja.png" alt="Aplikacja w telefonie" width="300">
+
+### Wdrożenie (ok. 10 minut, przez panel Cloudflare)
+
+1. Załóż darmowe konto na <https://dash.cloudflare.com/sign-up>.
+2. **Baza:** menu *Storage & Databases → D1 SQL Database → Create*, nazwa `lodowka` → *Create*.
+3. **Worker:** menu *Compute (Workers) → Workers & Pages → Create → Start with Hello World*,
+   nazwa `lodowka` → *Deploy*.
+4. Na stronie Workera kliknij **Edit code**. Usuń całą przykładową zawartość, wklej zawartość
+   pliku [`cloud/worker.js`](cloud/worker.js) i kliknij **Deploy**.
+5. Wróć do Workera, otwórz **Settings → Bindings → Add → D1 database**. Wpisz *Variable name* `DB`,
+   wybierz bazę `lodowka` i zapisz.
+6. W **Settings → Variables and Secrets → Add** wybierz *Type* **Secret**, wpisz *Name* `HASLO`
+   i jako *Value* podaj długie hasło (np. 4 losowe słowa). Zapisz.
+7. Skopiuj adres Workera, np. `https://lodowka.twoja-nazwa.workers.dev`, i otwórz go w telefonie.
+   Zaloguj się hasłem.
+8. Na lodówce wejdź w `http://lodowka.local/ustawienia` → sekcja **Aplikacja w telefonie**. Wpisz
+   adres i to samo hasło → **Zapisz**. Potem kliknij **Sprawdź połączenie**.
+
+Przy pierwszej synchronizacji lodówka wyśle do aplikacji całą swoją obecną listę.
+
+> Wdrożenie z wiersza poleceń (dla chętnych): w katalogu `cloud/` uruchom
+> `npx wrangler d1 create lodowka`, wklej id bazy do `wrangler.toml`, a potem
+> `npx wrangler secret put HASLO` i `npx wrangler deploy`.
+
 ## Budowanie samodzielnie (PlatformIO)
 
 ```bash
@@ -161,6 +199,8 @@ zasilać urządzenie z ładowarki USB-C (cienki kabel płaski dobrze się sprawd
 | `src/weather.*` | Open-Meteo i opisy pogody po polsku |
 | `src/web.*` | panel WWW i REST API (`/api/list`, `/api/add`, `/api/remove`, `/api/clear`) |
 | `src/state.*` | lista zakupów zapisywana w NVS |
+| `src/cloud.*`, `lib/shopping/sync.*` | synchronizacja z aplikacją w telefonie (scalanie testowane w `test/`) |
+| `cloud/worker.js` | aplikacja w telefonie: Cloudflare Worker + D1, logowanie hasłem |
 | `src/config.*`, `src/settings.*` | ustawienia w NVS, portal konfiguracyjny i strona `/ustawienia` |
 | `lib/shopping/` | parser polskich poleceń i logika listy (testowane w `test/`) |
 | `include/board.h` | pinout NOTE4C |

@@ -64,6 +64,8 @@ void begin() {
 #else
     cfg.tz = getStr("tz", "CET-1CEST,M3.5.0,M10.5.0/3");
 #endif
+    cfg.cloudUrl = getStr("cloudUrl", "");
+    cfg.cloudPassword = getStr("cloudPass", "");
     if (cfg.sttUrl.isEmpty()) applySttPreset(cfg);
 }
 
@@ -80,9 +82,13 @@ void save() {
     prefs.putString("sttModel", cfg.sttModel);
     prefs.putString("sttKey", cfg.sttKey);
     prefs.putString("tz", cfg.tz);
+    prefs.putString("cloudUrl", cfg.cloudUrl);
+    prefs.putString("cloudPass", cfg.cloudPassword);
 }
 
 bool hasWifi() { return cfg.ssid.length() > 0; }
+
+bool hasCloud() { return cfg.cloudUrl.length() > 0 && cfg.cloudPassword.length() > 0; }
 
 bool hasLocation() { return !isnan(cfg.lat) && !isnan(cfg.lon); }
 

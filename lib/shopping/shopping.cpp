@@ -406,6 +406,17 @@ bool isPromptEcho(const std::string& text, const std::string& prompt) {
     return matched * 10 >= tw.size() * 8;
 }
 
+std::string itemKey(const std::string& name) {
+    std::string k;
+    for (char c : fold(normalizeText(name))) {
+        if (c == ',') continue;
+        if (c == ' ' && (k.empty() || k.back() == ' ')) continue;
+        k += c;
+    }
+    while (!k.empty() && k.back() == ' ') k.pop_back();
+    return k;
+}
+
 bool itemsMatch(const std::string& a, const std::string& b) {
     // Bez polskich znaków: "maslo" z rozpoznawania ma pasować do "Masło" na liście.
     const std::string na = fold(normalizeText(a));

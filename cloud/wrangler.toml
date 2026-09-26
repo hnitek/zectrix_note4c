@@ -1,0 +1,11 @@
+# Tylko dla wdrożenia z wiersza poleceń (npx wrangler deploy).
+# Przy wdrożeniu przez panel Cloudflare ten plik nie jest potrzebny.
+name = "lodowka"
+main = "worker.js"
+compatibility_date = "2026-09-01"
+
+[[d1_databases]]
+binding = "DB"
+database_name = "lodowka"
+# Wklej id z: npx wrangler d1 create lodowka
+database_id = "WKLEJ-TUTAJ-ID-BAZY"

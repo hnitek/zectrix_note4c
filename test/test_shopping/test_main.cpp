@@ -1,6 +1,7 @@
 #include <unity.h>
 
 #include "shopping.h"
+#include "sync.h"
 
 using Kind = VoiceCommand::Kind;
 
@@ -128,6 +129,33 @@ void test_prompt_echo() {
     TEST_ASSERT_FALSE(isPromptEcho("Wyczyść listę zakupów", p));
 }
 
+void test_sync_merge() {
+    // Pierwsza synchronizacja: lokalne bez id zostają (czekają na wysłanie), chmura dochodzi.
+    auto r = mergeWithRemote({{"a1", "Chleb"}}, {"Mleko", "chleb"}, {}, {});
+    TEST_ASSERT_EQUAL_size_t(2, r.items.size());
+    TEST_ASSERT_EQUAL_STRING("Chleb", r.items[0].c_str());
+    TEST_ASSERT_EQUAL_STRING("Mleko", r.items[1].c_str());
+    TEST_ASSERT_EQUAL_STRING("a1", r.idByKey["chleb"].c_str());
+
+    // Odhaczone w telefonie (zniknęło z chmury) -> znika z lodówki.
+    r = mergeWithRemote({{"b2", "Masło"}}, {"Mleko", "Masło"}, {{"mleko", "m1"}, {"maslo", "b2"}}, {});
+    TEST_ASSERT_EQUAL_size_t(1, r.items.size());
+    TEST_ASSERT_EQUAL_STRING("Masło", r.items[0].c_str());
+
+    // Kupione na lodówce, jeszcze niewysłane -> nie wraca z chmury.
+    r = mergeWithRemote({{"m1", "Mleko"}, {"b2", "Masło"}}, {"Masło"}, {{"mleko", "m1"}, {"maslo", "b2"}},
+                        {"m1"});
+    TEST_ASSERT_EQUAL_size_t(1, r.items.size());
+    TEST_ASSERT_EQUAL_STRING("Masło", r.items[0].c_str());
+
+    // Dodane w telefonie -> pojawia się na lodówce; zmiana nazwy w telefonie nie dubluje.
+    r = mergeWithRemote({{"m1", "Mleko 2%"}, {"j3", "Jajka"}}, {"Mleko"}, {{"mleko", "m1"}}, {});
+    TEST_ASSERT_EQUAL_size_t(2, r.items.size());
+    TEST_ASSERT_EQUAL_STRING("Mleko 2%", r.items[0].c_str());
+    TEST_ASSERT_EQUAL_STRING("Jajka", r.items[1].c_str());
+    TEST_ASSERT_EQUAL_STRING("maslo", itemKey("Masło.").c_str());
+}
+
 void test_items_match_inflection() {
     TEST_ASSERT_TRUE(itemsMatch("Jajka", "jajek"));
     TEST_ASSERT_TRUE(itemsMatch("Masło", "masła"));
@@ -162,6 +190,7 @@ int main() {
     RUN_TEST(test_empty);
     RUN_TEST(test_bare_item_is_add);
     RUN_TEST(test_prompt_echo);
+    RUN_TEST(test_sync_merge);
     RUN_TEST(test_items_match_inflection);
     RUN_TEST(test_list_apply);
     return UNITY_END();

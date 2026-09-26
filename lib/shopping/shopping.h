@@ -31,6 +31,9 @@ std::string buildSttPrompt(const std::vector<std::string>& listItems);
 // Zwraca true, jeśli rozpoznany tekst wygląda na takie "echo".
 bool isPromptEcho(const std::string& text, const std::string& prompt);
 
+// Klucz porównywania nazw: małe litery, bez polskich znaków i interpunkcji.
+std::string itemKey(const std::string& name);
+
 // Wielka pierwsza litera (obsługuje polskie znaki).
 std::string capitalizeFirst(const std::string& text);
 

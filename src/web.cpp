@@ -4,6 +4,7 @@
 #include <Update.h>
 #include <WebServer.h>
 
+#include "cloud.h"
 #include "settings.h"
 #include "state.h"
 
@@ -91,13 +92,14 @@ li button{background:none;color:var(--acc);padding:6px 10px;font-size:20px}
 <form id="f"><input id="i" placeholder="np. mleko, chleb i masło" autocomplete="off"><button>Dodaj</button></form>
 <ul id="l"></ul>
 <div class="foot"><span id="c"></span><button id="x">Wyczyść listę</button></div>
+<div class="foot"><button id="sms">Wyślij SMS-em</button><span id="st"></span></div>
 <p class="foot"><a href="/ustawienia" style="color:inherit">Ustawienia</a>
 <a href="/nagranie" style="color:inherit">Ostatnie nagranie</a>
 <a href="/aktualizacja" style="color:inherit">Aktualizacja</a></p>
 </main><script>
 const l=document.getElementById('l'),c=document.getElementById('c');
 async function api(p,b){const r=await fetch(p,{method:b?'POST':'GET',body:b});render(await r.json())}
-function render(items){l.innerHTML='';
+function render(items){cur=items;l.innerHTML='';
  if(!items.length){l.innerHTML='<li class="empty">Lista jest pusta</li>'}
  items.forEach((t,i)=>{const li=document.createElement('li');const s=document.createElement('span');s.textContent=t;
   const b=document.createElement('button');b.textContent='✕';b.title='Usuń';
@@ -106,6 +108,9 @@ function render(items){l.innerHTML='';
 document.getElementById('f').onsubmit=e=>{e.preventDefault();const i=document.getElementById('i');
  if(!i.value.trim())return;const d=new FormData();d.append('text',i.value);i.value='';api('/api/add',d)};
 document.getElementById('x').onclick=()=>{if(confirm('Wyczyścić całą listę?'))api('/api/clear',new FormData())};
+let cur=[];
+document.getElementById('sms').onclick=()=>{location.href='sms:?&body='+encodeURIComponent('Lista zakupów:\n'+cur.map(t=>'- '+t).join('\n'))};
+fetch('/api/status').then(r=>r.json()).then(s=>{if(s.cloud)document.getElementById('st').textContent='Aplikacja w telefonie: '+s.cloud});
 api('/api/list');setInterval(()=>api('/api/list'),15000);
 </script></body></html>)HTML";
 
@@ -140,6 +145,13 @@ void begin(void (*onChange)()) {
     server.on("/api/clear", HTTP_POST, [] {
         if (state::clear()) notifyChanged();
         sendList();
+    });
+    server.on("/api/status", HTTP_GET, [] {
+        JsonDocument doc;
+        doc["cloud"] = cloud::status();
+        String out;
+        serializeJson(doc, out);
+        server.send(200, "application/json; charset=utf-8", out);
     });
     settings::registerRoutes(server, "/ustawienia");
     server.on("/aktualizacja", HTTP_GET, [] { server.send_P(200, "text/html; charset=utf-8", kOtaPage); });

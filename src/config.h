@@ -15,6 +15,8 @@ struct Config {
     String sttModel;
     String sttKey;
     String tz;               // strefa czasowa POSIX
+    String cloudUrl;         // aplikacja w telefonie (Cloudflare Worker), np. https://lodowka.x.workers.dev
+    String cloudPassword;    // hasło (sekret HASLO w Workerze)
 };
 
 namespace config {
@@ -27,6 +29,7 @@ Config& get();
 void save();
 bool hasWifi();
 bool hasLocation();
+bool hasCloud();
 
 // Ustawia URL i model dla wybranego dostawcy (dla "custom" zostawia podane).
 void applySttPreset(Config& c);

@@ -3,7 +3,9 @@
 #include <DNSServer.h>
 #include <WiFi.h>
 
+#include "cloud.h"
 #include "config.h"
+#include "state.h"
 #include "stt.h"
 
 namespace settings {
@@ -72,6 +74,15 @@ border:0;border-radius:10px;background:var(--acc);color:#fff}a{color:var(--acc)}
     h += c.sttKey.length() ? " placeholder=\"(bez zmian)\">" : " placeholder=\"gsk_...\">";
     h += "<small>Groq: załóż konto na console.groq.com i utwórz klucz w zakładce API Keys.</small>";
     if (!setupMode) h += "<p><a href=\"/test-klucza\">Sprawdź zapisany klucz</a></p>";
+    h += "<h2>Aplikacja w telefonie</h2><small>Lista w chmurze do odhaczania w sklepie "
+         "(Cloudflare Worker z katalogu cloud/ – instrukcja w README). Zostaw puste, jeśli nie używasz.</small>";
+    h += "<label>Adres aplikacji</label><input name=\"cloudUrl\" placeholder=\"https://lodowka.twoja-nazwa.workers.dev\" "
+         "value=\"" + esc(c.cloudUrl) + "\">";
+    h += "<label>Hasło aplikacji</label><input name=\"cloudPass\" type=\"password\" autocomplete=\"off\"";
+    h += c.cloudPassword.length() ? " placeholder=\"(bez zmian)\">" : ">";
+    if (!setupMode && config::hasCloud()) {
+        h += "<small>Synchronizacja: " + esc(cloud::status()) + " · <a href=\"/test-chmury\">Sprawdź połączenie</a></small>";
+    }
     h += "<details><summary>Zaawansowane (dostawca „Inny”)</summary>";
     h += "<label>Adres API</label><input name=\"url\" value=\"" + esc(c.sttUrl) + "\">";
     h += "<label>Model</label><input name=\"model\" value=\"" + esc(c.sttModel) + "\">";
@@ -103,6 +114,16 @@ void save(WebServer& server) {
         c.sttKey.trim();
     }
     if (server.arg("tz").length()) c.tz = server.arg("tz");
+    String cloudUrl = server.arg("cloudUrl");
+    cloudUrl.trim();
+    if (cloudUrl != c.cloudUrl) {
+        // Inna aplikacja = inne id pozycji; stare powiązania trzeba zapomnieć,
+        // a cała lista z lodówki zostanie wysłana do nowej aplikacji.
+        state::resetSync();
+        c.cloudUrl = cloudUrl;
+    }
+    if (server.arg("cloudPass").length()) c.cloudPassword = server.arg("cloudPass");
+    if (c.cloudUrl.isEmpty()) c.cloudPassword = "";
     config::save();
 
     server.send(200, "text/html; charset=utf-8",
@@ -122,6 +143,14 @@ void registerRoutes(WebServer& server, const char* path) {
         server.send(200, "text/html; charset=utf-8", page(false, action));
     });
     server.on(path, HTTP_POST, [&server] { save(server); });
+    server.on("/test-chmury", HTTP_GET, [&server] {
+        String r = esc(cloud::test());
+        server.send(200, "text/html; charset=utf-8",
+                    "<!doctype html><meta charset=utf-8><meta name=viewport content='width=device-width'>"
+                    "<body style='font:18px system-ui;padding:16px;max-width:520px;margin:auto'>"
+                    "<p><a href='/ustawienia'>&larr; Ustawienia</a></p><h2>Test aplikacji w telefonie</h2><p>" +
+                        r + "</p></body>");
+    });
     server.on("/test-klucza", HTTP_GET, [&server] {
         String r = esc(stt::checkKey());
         server.send(200, "text/html; charset=utf-8",
